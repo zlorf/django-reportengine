@@ -1,7 +1,7 @@
 """Reports base class. This reports module trys to provide an ORM agnostic reports engine that will allow nice reports to be generated and exportable in a variety of formats. It seeks to be easy to use with querysets, raw SQL, or pure python. An additional goal is to have the reports be managed by model instances as well (e.g. a generic SQL based report that can be done in the backend).
 
 """
-from django import forms 
+from django import forms
 from django.db import models
 from django.db.models.fields.related import RelatedField
 from django.db.models.fields import FieldDoesNotExist
@@ -31,6 +31,8 @@ class Report(object):
     per_page=100
     can_show_all=True
     output_formats=[AdminOutputFormat(),CSVOutputFormat()]
+    if XLS_AVAILABLE:
+        output_formats.append(XLSOutputFormat())
     allow_unspecified_filters = False
     date_field = None  # if specified will lookup for this date field. .this is currently limited to queryset based lookups
     default_mask = {}  # a dict of filter default values. Can be callable
@@ -44,7 +46,7 @@ class Report(object):
         for k in self.default_mask.keys():
             v=self.default_mask[k]
             m[k] =  callable(v) and v() or v
-        return m 
+        return m
 
     def get_filter_form(self,request):
         form = forms.Form(data=request.REQUEST)
@@ -86,7 +88,7 @@ class QuerySetReport(Report):
                 form.fields.update(fields)
         form.full_clean()
         return form
- 
+
     def get_rows(self,filters={},order_by=None):
         qs=self.queryset.filter(**filters)
         if order_by:
@@ -97,16 +99,16 @@ class ModelReport(QuerySetReport):
     model = None
 
     def __init__(self):
-        super(ModelReport,self).__init__() 
+        super(ModelReport,self).__init__()
         self.queryset=self.model.objects
 
 class SQLReport(Report):
     rows_sql=None # sql statement with named  parameters in python syntax (e.g. "%(age)s" )
-    aggregate_sql=None # sql statement that brings in aggregates. pulls from column name and value for first row only 
+    aggregate_sql=None # sql statement that brings in aggregates. pulls from column name and value for first row only
     query_params=[] # list of tuples, (name,label,datatype) where datatype is a mapping to a registerd filtercontrol
 
     def get_filter_form(self,request):
-        form=forms.Form(data=request.REQUEST) 
+        form=forms.Form(data=request.REQUEST)
         for q in self.query_params:
             control = FilterControl.create_from_datatype(q[2],q[0],q[1])
             fields = control.get_fields()
@@ -114,27 +116,27 @@ class SQLReport(Report):
         form.full_clean()
         return form
 
-    # CONSIDER not ideal in terms paging, would be better to fetch within a range.. 
+    # CONSIDER not ideal in terms paging, would be better to fetch within a range..
     def get_rows(self,filters={},order_by=None):
         # TODO incorporate offset/limit somehow
         from django.db import connection
         cursor = connection.cursor()
         if self.row_sql:
-            cursor.execute(self.row_sql%filters) 
+            cursor.execute(self.row_sql%filters)
             rows=cursor.fetchall()
         else: rows=[]
 
         if self.aggregate_sql:
             cursor.execute(self.aggregate_sql%filters)
             result=cursor.fetchone() # only fetch first row
-        
+
             agg=[]
             for i in range(len(result)):
                 agg.append((cursor.description[i][0],result[i]))
         else: agg=[]
 
         return rows,agg
-    
+
 class DateSQLReport(SQLReport):
     aggregate_sql=None
     query_params=[("date","Date","datetime")]
