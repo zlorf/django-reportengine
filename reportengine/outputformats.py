@@ -88,12 +88,12 @@ class XLSOutputFormat(OutputFormat):
         rows.extend(context['rows'])
 
         ## Create the spreadsheet from our data
-        workbook = xlwt.Workbook()
+        workbook = xlwt.Workbook(encoding='utf8')
         worksheet = workbook.add_sheet('report')
         for row_index, row in enumerate(rows):
             for col_index, val in enumerate(row):
                 if isinstance(val, basestring):
-                    val = smart_unicode(val)
+                    val = smart_unicode(val).encode('utf8')
                 worksheet.write(row_index, col_index, val)
         workbook.save(output)
 
