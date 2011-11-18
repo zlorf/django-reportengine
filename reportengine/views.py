@@ -58,6 +58,7 @@ class ReportView(ListView):
         '''
         params = dict(self.request.GET.iteritems())
         params.pop('output', None)
+        params.pop('page', None)
         return params
         
     def get_session_key(self):
@@ -73,6 +74,10 @@ class ReportView(ListView):
         if data:
             self.report_request = ReportRequest.objects.get(token=data["token"])
             self.report = self.report_request.get_report()
+            if not self.asynchronous_report and not self.report_request.completion_timestamp:
+                async_report(self.report_request.token)
+                self.report_request = ReportRequest.objects.get(pk=self.report_request.pk)
+                assert self.report_request.completion_timestamp
             return bool(self.report_request.completion_timestamp)
         else:
             self.report_request = self.create_report_request()
@@ -101,7 +106,7 @@ class ReportView(ListView):
         return rr
     
     def get_queryset(self):
-        return self.report_request.rows.all()
+        return ReportRowQuery(self.report_request.rows.all())
     
     def get_filter_form(self):
         filter_form = self.report.get_filter_form(self.request.REQUEST)
@@ -112,14 +117,14 @@ class ReportView(ListView):
         p = info['page_obj']
         page = p.number
         rows = p.object_list
-        order_by = None
+        order_by = None #TODO
         params = dict(self.request.GET.iteritems())
 
         # HACK: fill up a fake ChangeList object to use the admin paginator
         class MiniChangeList:
             def __init__(self,paginator, page, params, report):
                 self.paginator = paginator
-                self.page_num = page
+                self.page_num = page-1
                 self.show_all = report.can_show_all
                 self.can_show_all = False
                 self.multi_page = True
@@ -132,20 +137,20 @@ class ReportView(ListView):
                         del self.params[k]
                 if new_params != None:
                     self.params.update(new_params)
-                return "?%s"%urlencode(self.params)
+                params = dict(self.params)
+                if 'p' in params:
+                    params['page'] = params.pop('p') + 1
+                return "?%s"%urlencode(params)
 
         cl_params = order_by and dict(params,order_by=order_by) or params
         cl = MiniChangeList(paginator, page, cl_params, self.report)
         return cl
     
-    def get_rows(self, queryset):
-        return ReportRowQuery(queryset)
-    
     def get_context_data(self, **kwargs):
         data = ListView.get_context_data(self, **kwargs)
         data.update({'report': self.report,
                     'title':self.report.verbose_name,
-                    'rows':self.get_rows(data['object_list']),
+                    'rows':self.object_list,
                     'filter_form':self.get_filter_form(),
                     "aggregates":self.report_request.aggregates,
                     "cl":self.get_changelist(data),
@@ -154,6 +159,7 @@ class ReportView(ListView):
     
     def get(self, request, *args, **kwargs):
         if not self.get_report_request():
+            assert self.asynchronous_report
             cx = {"reportrequest":self.report_request,
                   'task':self.task}
             return render_to_response("reportengine/async_wait.html",

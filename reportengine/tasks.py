@@ -44,6 +44,8 @@ def async_report(token):
     mask.update(filters)
     rows, aggregates = report.get_rows(mask, order_by=kwargs.get('order_by',None))
     
+    ReportRequestRow.objects.filter(report_request=report_request).delete()
+    
     for index, row in enumerate(rows):
         report_row = ReportRequestRow(report_request=report_request, row_number=index)
         report_row.data = row
