@@ -1,3 +1,4 @@
+from django.core.exceptions import ImproperlyConfigured
 from django.shortcuts import render_to_response
 from django.template.context import RequestContext
 from django.http import HttpResponse
@@ -5,6 +6,14 @@ from django.utils.encoding import smart_unicode
 import csv
 from cStringIO import StringIO
 from xml.etree import ElementTree as ET
+
+## Exporting to XLS requires the xlwt library
+## http://www.python-excel.org/
+try:
+    import xlwt
+    XLS_AVAILABLE = True
+except ImportError:
+    XLS_AVAILABLE = False
 
 class OutputFormat(object):
     verbose_name="Abstract Output Format"
@@ -62,6 +71,39 @@ class CSVOutputFormat(OutputFormat):
         resp['Content-Disposition'] = 'attachment; filename=%s.csv'%context['report'].slug
         self.generate_output(context, resp)
         return resp
+
+
+class XLSOutputFormat(OutputFormat):
+    no_paging = True
+    slug = 'xls'
+    verbose_name = 'XLS (Microsoft Excel)'
+
+    def generate_output(self, context, output):
+        if not XLS_AVAILABLE:
+            raise ImproperlyConfigured('Missing module xlwt.')
+        ## Put all our data into a big list
+        rows = []
+        rows.extend(context['aggregates'])
+        rows.append(context['report'].labels)
+        rows.extend(context['rows'])
+
+        ## Create the spreadsheet from our data
+        workbook = xlwt.Workbook(encoding='utf8')
+        worksheet = workbook.add_sheet('report')
+        for row_index, row in enumerate(rows):
+            for col_index, val in enumerate(row):
+                if isinstance(val, basestring):
+                    val = smart_unicode(val).encode('utf8')
+                worksheet.write(row_index, col_index, val)
+        workbook.save(output)
+
+    def get_response(self, context, request):
+        resp = HttpResponse(mimetype='application/vnd.ms-excel')
+        resp['Content-Disposition'] = 'attachment; filename=%s.xls' % context['report'].slug
+        self.generate_output(context, resp)
+        return resp
+
+
 
 class XMLOutputFormat(OutputFormat):
     verbose_name="XML"
