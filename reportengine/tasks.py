@@ -1,37 +1,28 @@
 from celery.decorators import task
-from models import ReportRequest
+from models import ReportRequest, ReportRequestRow
 import reportengine
-from reportengine.outputformats import CSVOutputFormat, XMLOutputFormat
-import StringIO
-from urlparse import parse_qsl
-
-# TODO not-DRY copy/paste from management/commands/generate_report.py, should be combined
-
-class MockRequest(object):
-    def __init__(self, **kwargs):
-        self.REQUEST = kwargs
+import datetime
 
 @task()
 def async_report(token):
    
     try:
-        repreq = ReportRequest.objects.get(token=token)
+        report_request = ReportRequest.objects.get(token=token)
     except ReportRequest.DoesNotExist:
         # Error?
         return 
 
 
-    kwargs = dict(parse_qsl(repreq.params)) 
+    kwargs = report_request.params
 
     # THis is like 90% the same 
     reportengine.autodiscover() ## Populate the reportengine registry
     try:
-        report = reportengine.get_report(repreq.namespace, repreq.slug)()
+        report = report_request.get_report()
     except Exception, err:
         raise err  
     
-    request = MockRequest(**kwargs)
-    filter_form = report.get_filter_form(request)
+    filter_form = report.get_filter_form(kwargs)
     if filter_form.fields:
         if filter_form.is_valid():
             filters = filter_form.cleaned_data
@@ -39,7 +30,7 @@ def async_report(token):
             filters = {}
     else:
         if report.allow_unspecified_filters:
-            filters = dict(request.REQUEST)
+            filters = kwargs
         else:
             filters = {}
     
@@ -52,38 +43,13 @@ def async_report(token):
     mask = report.get_default_mask()
     mask.update(filters)
     rows, aggregates = report.get_rows(mask, order_by=kwargs.get('order_by',None))
-   
-    output = StringIO.StringIO()
- 
-    ## Get our output format, setting a default if one wasn't set or isn't valid for this report
-    outputformat = None
-    oformat = kwargs.get("format",None)
-    if oformat:
-        for format in report.output_formats:
-            if format.slug == oformat:
-                outputformat = format
-
-    if not outputformat:
-        outputformat = report.output_formats[0]
-    ## By default, [0] is AdminOutputFormat, so grab the last one instead
-    #outputformat = report.output_formats[-1]
     
-    context = {
-        'report': report,
-        'title': report.verbose_name,
-        'rows': rows,
-        'filter_form': filter_form,
-        'aggregates': aggregates,
-        'paginator': None,
-        'cl': None,
-        'page': 0,
-        'urlparams': repreq.params
-        }
-    
-    outputformat.generate_response(context, output)
-    #output.close()
-   
-    repreq.content = output.getvalue() 
-    repreq.save() 
+    for index, row in enumerate(rows):
+        report_row = ReportRequestRow(report_request=report_request, row_number=index)
+        report_row.data = row
+        report_row.save()
+    report_request.aggregates = aggregates
+    report_request.completion_timestamp = datetime.datetime.now()
+    report_request.save()
 
 

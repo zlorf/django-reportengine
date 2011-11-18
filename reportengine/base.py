@@ -46,8 +46,8 @@ class Report(object):
             m[k] =  callable(v) and v() or v
         return m 
 
-    def get_filter_form(self,request):
-        form = forms.Form(data=request.REQUEST)
+    def get_filter_form(self, data):
+        form = forms.Form(data=data)
         return form
 
     # CONSIDER maybe an "update rows"?
@@ -69,10 +69,10 @@ class QuerySetReport(Report):
     queryset = None
     list_filter = []
 
-    def get_filter_form(self,request):
+    def get_filter_form(self, data):
         """Retrieves naive filter based upon list_filter and the queryset model fields.. will not follow __ relations i think"""
         # TODO iterate through list filter and create appropriate widget and prefill from request
-        form = forms.Form(data=request.REQUEST)
+        form = forms.Form(data=data)
         for f in self.list_filter:
             # Allow specification of custom filter control, or specify field name (and label?)
             if isinstance(f,FilterControl):
@@ -105,8 +105,8 @@ class SQLReport(Report):
     aggregate_sql=None # sql statement that brings in aggregates. pulls from column name and value for first row only 
     query_params=[] # list of tuples, (name,label,datatype) where datatype is a mapping to a registerd filtercontrol
 
-    def get_filter_form(self,request):
-        form=forms.Form(data=request.REQUEST) 
+    def get_filter_form(self, data):
+        form=forms.Form(data=data)
         for q in self.query_params:
             control = FilterControl.create_from_datatype(q[2],q[0],q[1])
             fields = control.get_fields()
@@ -145,3 +145,4 @@ class DateSQLReport(SQLReport):
     }
 
 # TODO build AnnotatedReport that deals with .annotate functions in ORM
+

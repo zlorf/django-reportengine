@@ -1,14 +1,16 @@
 from django.shortcuts import render_to_response,redirect
 from django.template.context import RequestContext
-from django.core.paginator import Paginator
-from django.contrib.admin.views.main import ALL_VAR,ORDER_VAR, PAGE_VAR
 from django.contrib.admin.views.decorators import staff_member_required
 from django.core.urlresolvers import reverse
-from django.http import HttpResponseRedirect,HttpResponse
+from django.http import HttpResponseRedirect
+from django.conf import settings
+from django.views.generic import ListView
 import reportengine
 from reportengine.models import ReportRequest
 from urllib import urlencode
 import datetime,calendar,hashlib
+
+from tasks import async_report
 
 def next_month(d):
     """helper to get next month"""
@@ -24,77 +26,104 @@ def report_list(request):
     return render_to_response('reportengine/list.html', {'reports': reports},
                               context_instance=RequestContext(request))
 
-# TODO build date_field redirects.. so view is at /current/<day|week|month|year>/<slug>/<format>/ and redirects
-# to the appropriate date filter
-# TODO assign appropriate permissions. Some reports might need to be accessible via OAuth or some other mechanism
-@staff_member_required
-def view_report(request, namespace, slug, output=None):
-    report = reportengine.get_report(namespace,slug)()
-    params=dict(request.REQUEST)
-
-    order_by=params.pop(ORDER_VAR,None)
-
-    page,per_page=0,report.per_page
-    try:
-        page=int(params.pop(PAGE_VAR,0))
-    except ValueError:
-        pass # ignore bogus page/per_page
-
-    # Filters are served as forms from the report
-    filter_form=report.get_filter_form(request)
-    if filter_form.fields:
-        if filter_form.is_valid():
-            filters=filter_form.cleaned_data
+class ReportRowQuery(object):
+    def __init__(self, queryset):
+        self.queryset = queryset
+    
+    def wrap(self, entry):
+        return entry.data
+    
+    def __len__(self):
+        return len(self.queryset)
+    
+    def count(self):
+        return self.queryset.count()
+    
+    def __getitem__(self, val):
+        if isinstance(val, slice):
+            results = list()
+            for entry in self.queryset[val]:
+                results.append(self.wrap(entry))
+            return results
         else:
-            # If invalid filters, blank out filters so form error can propagate up
-            filters={}
-    else:
-        # If no filter form fields are present, we just allow params to go through
-        # CONSIDER making this allowance explicit? e.g. report.allow_unspecified_filters
-        if report.allow_unspecified_filters:
-            filters=dict(request.REQUEST)
+            return self.wrap(self.queryset[val])
+
+class ReportView(ListView):
+    asynchronous_report = getattr(settings, "ASYNC_REPORTS", False)
+    paginate_by = 50
+    
+    def report_params(self):
+        '''
+        Return report params without the output format
+        '''
+        params = dict(self.request.GET.iteritems())
+        params.pop('output', None)
+        return params
+        
+    def get_session_key(self):
+        report_params = self.report_params()
+        key_params = ["async-reportengine", self.kwargs['namespace'], self.kwargs['slug'], urlencode(report_params)] #TODO timestamp/expiration?
+        session_key = hashlib.md5('|'.join(key_params)).hexdigest()
+        return session_key
+    
+    def get_report_request(self):
+        key = self.get_session_key()
+        data = self.request.session.get(key, None)
+        self.task = None
+        if data:
+            self.report_request = ReportRequest.objects.get(token=data["token"])
+            self.report = self.report_request.get_report()
+            return bool(self.report_request.completion_timestamp)
         else:
-            filters={}
-
-    # Remove blank filters
-    for k in filters.keys():
-        if filters[k] == '':
-            del filters[k]
-
-    # Merge filters with default mask
-    mask = report.get_default_mask()
-    mask.update(filters)
-
-
-    # pull the rows and aggregates
-    rows,aggregates = report.get_rows(mask,order_by=order_by)
-
-    # Determine output format, as it can squash paging if it wants
-    outputformat=None
-    if output:
-        for of in report.output_formats:
-            if of.slug == output:
-                outputformat=of
-    if not outputformat:
-        outputformat = report.output_formats[0]
-
-    # Fill out the paginator if we have specified a page length
-    paginator=None
-    cl=None
-    if per_page and not outputformat.no_paging:
-        paginator=Paginator(rows,per_page)
-        p=paginator.page(page+1)
-        rows=p.object_list
+            self.report_request = self.create_report_request()
+            self.report = self.report_request.get_report()
+            if self.asynchronous_report:
+                self.task = async_report.delay(self.report_request.token)
+                self.request.session[key] = {'token':self.report_request.token,
+                                             'task':self.task,}
+                return False
+            else:
+                self.request.session[key] = {'token':self.report_request.token}
+                async_report(self.report_request.token)
+                self.report_request = ReportRequest.objects.get(pk=self.report_request.pk)
+                assert self.report_request.completion_timestamp
+                return bool(self.report_request.completion_timestamp)
+    
+    def create_report_request(self):
+        report_params = self.report_params()
+        token_params = [str(datetime.datetime.now()), self.kwargs['namespace'], self.kwargs['slug'], urlencode(report_params)]
+        token = hashlib.md5("|".join(token_params)).hexdigest()
+        rr = ReportRequest(token=token,
+                           namespace=self.kwargs['namespace'],
+                           slug=self.kwargs['slug'],
+                           params=report_params)
+        rr.save()
+        return rr
+    
+    def get_queryset(self):
+        return self.report_request.rows.all()
+    
+    def get_filter_form(self):
+        filter_form = self.report.get_filter_form(self.request.REQUEST)
+        return filter_form
+    
+    def get_changelist(self, info):
+        paginator = info['paginator']
+        p = info['page_obj']
+        page = p.number
+        rows = p.object_list
+        order_by = None
+        params = dict(self.request.GET.iteritems())
 
         # HACK: fill up a fake ChangeList object to use the admin paginator
         class MiniChangeList:
-            def __init__(self,paginator,page,per_page,params):
-                self.paginator=paginator
-                self.page_num=page
-                self.show_all=report.can_show_all
-                self.can_show_all=False
-                self.multi_page=True
-                self.params=params
+            def __init__(self,paginator, page, params, report):
+                self.paginator = paginator
+                self.page_num = page
+                self.show_all = report.can_show_all
+                self.can_show_all = False
+                self.multi_page = True
+                self.params = params
 
             def get_query_string(self,new_params=None,remove=None):
                 # Do I need to deal with new_params/remove?
@@ -105,21 +134,45 @@ def view_report(request, namespace, slug, output=None):
                     self.params.update(new_params)
                 return "?%s"%urlencode(self.params)
 
-        cl_params=order_by and dict(params,order_by=order_by) or params
-        cl=MiniChangeList(paginator,page,per_page,cl_params)
+        cl_params = order_by and dict(params,order_by=order_by) or params
+        cl = MiniChangeList(paginator, page, cl_params, self.report)
+        return cl
+    
+    def get_rows(self, queryset):
+        return ReportRowQuery(queryset)
+    
+    def get_context_data(self, **kwargs):
+        data = ListView.get_context_data(self, **kwargs)
+        data.update({'report': self.report,
+                    'title':self.report.verbose_name,
+                    'rows':self.get_rows(data['object_list']),
+                    'filter_form':self.get_filter_form(),
+                    "aggregates":self.report_request.aggregates,
+                    "cl":self.get_changelist(data),
+                    "urlparams":urlencode(self.request.REQUEST)})
+        return data
+    
+    def get(self, request, *args, **kwargs):
+        if not self.get_report_request():
+            cx = {"reportrequest":self.report_request,
+                  'task':self.task}
+            return render_to_response("reportengine/async_wait.html",
+                                      cx,
+                                      context_instance=RequestContext(self.request))
+        self.object_list = self.get_queryset()
+        kwargs['object_list'] = self.object_list
+        data = self.get_context_data(**kwargs)
+        outputformat = None
+        output = kwargs.get('output', None)
+        if output:
+            for of in self.report.output_formats:
+                if of.slug == output:
+                    outputformat=of
+        if not outputformat:
+            outputformat = self.report.output_formats[0]
+        return outputformat.get_response(data, request)
 
-
-    data = {'report': report,
-            'title':report.verbose_name,
-            'rows':rows,
-            'filter_form':filter_form,
-            "aggregates":aggregates,
-            "paginator":paginator,
-            "cl":cl,
-            "page":page,
-            "urlparams":urlencode(request.REQUEST)}
-
-    return outputformat.get_response(data,request)
+view_report = staff_member_required(ReportView.as_view())
 
 @staff_member_required
 def current_redirect(request, daterange, namespace, slug, output=None):
@@ -180,51 +233,4 @@ def calendar_day_view(request, year, month,day):
     cx={"reports":reports,"date":date,"calendar":cal}
     return render_to_response("reportengine/calendar_day.html",cx,
                               context_instance=RequestContext(request))
-
-def async_report(request, namespace, slug, output=None):
-    from tasks import async_report
-    # TODO build report via celery task 
-    # CONSIDER this 
-    # Request is stored as model object, only accessible by the requester via sesh token (offloads perms responsiblities)
-    #    
-    #
-    # If they have a report request token in their session,
-    tk = request.session.get("report_request",None)
-    #    try to pull up the report request and show it to them
-    #       if it exists, show them the reportrequest and clear
-    #       else clear the report request and continue (what about caching it for a while?)
-    #           ** When clearing, mark when it was viewed, and maybe the IP address 
-    if tk and tk["namespace"] == namespace \
-          and tk["slug"] == slug \
-          and tk["params"] == request.GET.urlencode():
-        try:
-            rr = ReportRequest.objects.get(token=tk["token"])
-            resp = HttpResponse(rr.content)  
-            if rr.mimetype:
-                resp["Content-Type"] = rr.mimetype
-            rr.viewed=datetime.datetime.now() 
-            rr.save()
-            del request.session["report_request"]
-            return resp
-        except ReportRequest.DoesNotExist:
-            rr = None 
-        del request.session["report_request"]
-
-    # Otherwise we have a new report request
-    # create a ReportRequest object, and store the token in their session
-    # fire off task with requested report 
-    # return them a wait page with meta refresh
-    token = hashlib.md5(" ".join([str(datetime.datetime.now()),request.session.session_key,namespace,slug,request.GET.urlencode()])).hexdigest()
-    rr = ReportRequest(token=token,namespace=namespace,slug=slug,params=request.GET.urlencode())
-    rr.save()
-
-    # enqueue celery task to build relevant report
-    cx = {"reportrequest":rr}
-
-    # is this necessary? maybe for debug?
-    cx["task"] = async_report.delay(rr.token)
-
-    request.session["report_request"] = dict(token=token,namespace=namespace,slug=slug,params=request.GET.urlencode(),task=cx["task"])
-    return render_to_response("reportengine/async_wait.html",cx,context_instance=RequestContext(request))
-
 
