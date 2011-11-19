@@ -16,7 +16,7 @@ class ReportRequest(models.Model):
     #content = models.TextField()
     viewed_on = models.DateTimeField(blank=True, null=True)
     #mimetype = models.CharField(max_length=255,null=True)
-    aggregates = JSONField()
+    aggregates = JSONField(datatype=list)
     
     def get_report(self):
         return reportengine.get_report(self.namespace, self.slug)()

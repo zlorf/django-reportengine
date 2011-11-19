@@ -5,6 +5,8 @@ from django.core.urlresolvers import reverse
 from django.http import HttpResponseRedirect
 from django.conf import settings
 from django.views.generic import ListView
+from django.views.decorators.cache import never_cache
+
 import reportengine
 from reportengine.models import ReportRequest
 from urllib import urlencode
@@ -71,13 +73,14 @@ class ReportView(ListView):
         key = self.get_session_key()
         data = self.request.session.get(key, None)
         self.task = None
-        if data:
+        if data is not None:
             self.report_request = ReportRequest.objects.get(token=data["token"])
             self.report = self.report_request.get_report()
-            if not self.asynchronous_report and not self.report_request.completion_timestamp:
+            if not self.report_request.completion_timestamp and (not self.asynchronous_report or getattr(settings, 'CELERY_ALWAYS_EAGER', False)):
                 async_report(self.report_request.token)
                 self.report_request = ReportRequest.objects.get(pk=self.report_request.pk)
                 assert self.report_request.completion_timestamp
+            #TODO check the status of the task, if error!
             return bool(self.report_request.completion_timestamp)
         else:
             self.report_request = self.create_report_request()
@@ -178,7 +181,7 @@ class ReportView(ListView):
             outputformat = self.report.output_formats[0]
         return outputformat.get_response(data, request)
 
-view_report = staff_member_required(ReportView.as_view())
+view_report = never_cache(staff_member_required(ReportView.as_view()))
 
 @staff_member_required
 def current_redirect(request, daterange, namespace, slug, output=None):

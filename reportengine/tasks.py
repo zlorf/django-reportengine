@@ -50,6 +50,7 @@ def async_report(token):
         report_row = ReportRequestRow(report_request=report_request, row_number=index)
         report_row.data = row
         report_row.save()
+    
     report_request.aggregates = aggregates
     report_request.completion_timestamp = datetime.datetime.now()
     report_request.save()
