@@ -73,6 +73,14 @@ class ReportView(ListView):
         key = self.get_session_key()
         data = self.request.session.get(key, None)
         self.task = None
+        
+        #check the status of the task, if error clear the session key and we will try again
+        if data is not None and 'task' in data:
+            result = async_report.AsyncResult(data['task'])
+            if result.state in ('FAILURE',):
+                del self.request.session[key]
+                data = None
+        
         if data is not None:
             self.report_request = ReportRequest.objects.get(token=data["token"])
             self.report = self.report_request.get_report()
@@ -80,7 +88,7 @@ class ReportView(ListView):
                 async_report(self.report_request.token)
                 self.report_request = ReportRequest.objects.get(pk=self.report_request.pk)
                 assert self.report_request.completion_timestamp
-            #TODO check the status of the task, if error!
+            
             return bool(self.report_request.completion_timestamp)
         else:
             self.report_request = self.create_report_request()
