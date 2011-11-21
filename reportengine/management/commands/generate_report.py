@@ -12,10 +12,6 @@ from urlparse import parse_qsl
 ## TODO: Be more DRY about how the report is generated, including
 ## outputformat selection and filters and context creation
 
-class MockRequest(object):
-    def __init__(self, **kwargs):
-        self.REQUEST = kwargs
-
 class Command(BaseCommand):
     help = 'Run a report'
     option_list = BaseCommand.option_list + (
@@ -72,7 +68,7 @@ class Command(BaseCommand):
 
 
         ## Parse our filters
-        request = MockRequest(**dict(parse_qsl(kwargs['filter'])))
+        request = dict(parse_qsl(kwargs['filter']))
         filter_form = report.get_filter_form(request)
         if filter_form.fields:
             if filter_form.is_valid():
@@ -81,7 +77,7 @@ class Command(BaseCommand):
                 filters = {}
         else:
             if report.allow_unspecified_filters:
-                filters = dict(request.REQUEST)
+                filters = request
             else:
                 filters = {}
 

@@ -1,3 +1,5 @@
+from settings import ASYNC_REPORTS
+
 from django.shortcuts import render_to_response,redirect
 from django.template.context import RequestContext
 from django.contrib.admin.views.decorators import staff_member_required
@@ -51,7 +53,7 @@ class ReportRowQuery(object):
             return self.wrap(self.queryset[val])
 
 class ReportView(ListView):
-    asynchronous_report = getattr(settings, "ASYNC_REPORTS", False)
+    asynchronous_report = ASYNC_REPORTS
     paginate_by = 50
     
     def report_params(self):
@@ -78,6 +80,7 @@ class ReportView(ListView):
         if data is not None and 'task' in data:
             result = async_report.AsyncResult(data['task'])
             if result.state in ('FAILURE',):
+                #TODO mark the report request as failed or for removal
                 del self.request.session[key]
                 data = None
         

@@ -55,4 +55,6 @@ def async_report(token):
     report_request.completion_timestamp = datetime.datetime.now()
     report_request.save()
 
-
+@task()
+def cleanup_stale_reports():
+    ReportRequest.objects.cleanup_stale_requests()

@@ -3,6 +3,18 @@ import datetime
 import reportengine
 
 from jsonfield import JSONField
+from settings import STALE_REPORT_SECONDS 
+
+class ReportRequestManager(models.Manager):
+    def completed(self):
+        return self.filter(completion_timestamp__isnull=False)
+    
+    def stale(self):
+        cutoff = datetime.datetime.now() - datetime.timedelta(seconds=STALE_REPORT_SECONDS)
+        return self.filter(request_made__lte=cutoff)
+    
+    def cleanup_stale_requests(self):
+        return self.stale().delete()
 
 class ReportRequest(models.Model):
     """Session based report request. Report request is made, and the token for the request is stored in the session so only that user can access this report. Task system generates the report and drops it into "content". When content is no longer null, user sees full report and their session token is cleared."""
@@ -17,6 +29,8 @@ class ReportRequest(models.Model):
     viewed_on = models.DateTimeField(blank=True, null=True)
     #mimetype = models.CharField(max_length=255,null=True)
     aggregates = JSONField(datatype=list)
+    
+    objects = ReportRequestManager()
     
     def get_report(self):
         return reportengine.get_report(self.namespace, self.slug)()
