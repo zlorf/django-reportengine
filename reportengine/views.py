@@ -14,8 +14,6 @@ from reportengine.models import ReportRequest
 from urllib import urlencode
 import datetime,calendar,hashlib
 
-from tasks import async_report
-
 def next_month(d):
     """helper to get next month"""
     return datetime.datetime(year=d.month<12 and d.year or d.year +1,month=d.month<12 and d.month+1 or 1,day=1)
@@ -78,6 +76,7 @@ class ReportView(ListView):
         
         #check the status of the task, if error clear the session key and we will try again
         if data is not None and 'task' in data:
+            from tasks import async_report
             result = async_report.AsyncResult(data['task'])
             if result.state in ('FAILURE',):
                 #TODO mark the report request as failed or for removal
@@ -88,6 +87,7 @@ class ReportView(ListView):
             self.report_request = ReportRequest.objects.get(token=data["token"])
             self.report = self.report_request.get_report()
             if not self.report_request.completion_timestamp and (not self.asynchronous_report or getattr(settings, 'CELERY_ALWAYS_EAGER', False)):
+                from tasks import async_report
                 async_report(self.report_request.token)
                 self.report_request = ReportRequest.objects.get(pk=self.report_request.pk)
                 assert self.report_request.completion_timestamp
@@ -97,13 +97,14 @@ class ReportView(ListView):
             self.report_request = self.create_report_request()
             self.report = self.report_request.get_report()
             if self.asynchronous_report:
+                from tasks import async_report
                 self.task = async_report.delay(self.report_request.token)
                 self.request.session[key] = {'token':self.report_request.token,
                                              'task':self.task,}
                 return False
             else:
                 self.request.session[key] = {'token':self.report_request.token}
-                async_report(self.report_request.token)
+                self.report_request.build_report()
                 self.report_request = ReportRequest.objects.get(pk=self.report_request.pk)
                 assert self.report_request.completion_timestamp
                 return bool(self.report_request.completion_timestamp)

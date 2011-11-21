@@ -34,6 +34,49 @@ class ReportRequest(models.Model):
     
     def get_report(self):
         return reportengine.get_report(self.namespace, self.slug)()
+    
+    def build_report(self):
+        kwargs = self.params
+
+        # THis is like 90% the same 
+        #reportengine.autodiscover() ## Populate the reportengine registry
+        try:
+            report = self.get_report()
+        except Exception, err:
+            raise err  
+        
+        filter_form = report.get_filter_form(kwargs)
+        if filter_form.fields:
+            if filter_form.is_valid():
+                filters = filter_form.cleaned_data
+            else:
+                filters = {}
+        else:
+            if report.allow_unspecified_filters:
+                filters = kwargs
+            else:
+                filters = {}
+        
+        # Remove blank filters
+        for k in filters.keys():
+            if filters[k] == '':
+                del filters[k]
+        
+        ## Update the mask and run the report!
+        mask = report.get_default_mask()
+        mask.update(filters)
+        rows, aggregates = report.get_rows(mask, order_by=kwargs.get('order_by',None))
+        
+        ReportRequestRow.objects.filter(report_request=self).delete()
+        
+        for index, row in enumerate(rows):
+            report_row = ReportRequestRow(report_request=self, row_number=index)
+            report_row.data = row
+            report_row.save()
+        
+        self.aggregates = aggregates
+        self.completion_timestamp = datetime.datetime.now()
+        self.save()
 
 class ReportRequestRow(models.Model):
     report_request = models.ForeignKey(ReportRequest, related_name='rows')
