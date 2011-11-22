@@ -6,7 +6,7 @@ from django.contrib.admin.views.decorators import staff_member_required
 from django.core.urlresolvers import reverse
 from django.http import HttpResponseRedirect
 from django.conf import settings
-from django.views.generic import ListView
+from django.views.generic import ListView, View
 from django.views.decorators.cache import never_cache
 
 import reportengine
@@ -50,10 +50,31 @@ class ReportRowQuery(object):
         else:
             return self.wrap(self.queryset[val])
 
-class ReportView(ListView):
+class RequestReportMixin(object):
     asynchronous_report = ASYNC_REPORTS
-    paginate_by = 50
     
+    def check_report_status(self):
+        #check to see if the report is not complete but async is off
+        if not self.report_request.completion_timestamp and (not self.asynchronous_report or getattr(settings, 'CELERY_ALWAYS_EAGER', False)):
+            self.report_request.build_report()
+            assert self.report_request.completion_timestamp
+        
+        #check to see if the task failed
+        if self.report_request.task_status() in ('FAILURE',):
+            return {'error':'Task Failed', 'completed':False}
+        
+        return {'completed':bool(self.report_request.completion_timestamp)}
+    
+    def get_session_key(self, namespace, slug, params):
+        key_params = ["async-reportengine", namespace, slug, urlencode(params)]
+        session_key = hashlib.md5('|'.join(key_params)).hexdigest()
+        return session_key
+
+'''
+creport requested
+'''
+
+class RequestReportView(View, RequestReportMixin):
     def report_params(self):
         '''
         Return report params without the output format
@@ -65,49 +86,37 @@ class ReportView(ListView):
         
     def get_session_key(self):
         report_params = self.report_params()
-        key_params = ["async-reportengine", self.kwargs['namespace'], self.kwargs['slug'], urlencode(report_params)] #TODO timestamp/expiration?
-        session_key = hashlib.md5('|'.join(key_params)).hexdigest()
-        return session_key
+        return RequestReportMixin.get_session_key(self, self.kwargs['namespace'], self.kwargs['slug'], report_params)
     
     def get_report_request(self):
         key = self.get_session_key()
         data = self.request.session.get(key, None)
         self.task = None
         
-        #check the status of the task, if error clear the session key and we will try again
-        if data is not None and 'task' in data:
-            from tasks import async_report
-            result = async_report.AsyncResult(data['task'])
-            if result.state in ('FAILURE',):
-                #TODO mark the report request as failed or for removal
-                del self.request.session[key]
-                data = None
-        
         if data is not None:
-            self.report_request = ReportRequest.objects.get(token=data["token"])
-            self.report = self.report_request.get_report()
-            if not self.report_request.completion_timestamp and (not self.asynchronous_report or getattr(settings, 'CELERY_ALWAYS_EAGER', False)):
-                from tasks import async_report
-                async_report(self.report_request.token)
-                self.report_request = ReportRequest.objects.get(pk=self.report_request.pk)
-                assert self.report_request.completion_timestamp
-            
-            return bool(self.report_request.completion_timestamp)
-        else:
-            self.report_request = self.create_report_request()
-            self.report = self.report_request.get_report()
-            if self.asynchronous_report:
-                from tasks import async_report
-                self.task = async_report.delay(self.report_request.token)
-                self.request.session[key] = {'token':self.report_request.token,
-                                             'task':self.task,}
-                return False
+            try:
+                self.report_request = ReportRequest.objects.get(token=data["token"])
+            except ReportRequest.DoesNotExist:
+                pass
             else:
-                self.request.session[key] = {'token':self.report_request.token}
-                self.report_request.build_report()
-                self.report_request = ReportRequest.objects.get(pk=self.report_request.pk)
-                assert self.report_request.completion_timestamp
-                return bool(self.report_request.completion_timestamp)
+                self.report = self.report_request.get_report()
+                if not self.report_request.completion_timestamp and (not self.asynchronous_report or getattr(settings, 'CELERY_ALWAYS_EAGER', False)):
+                    self.report_request.build_report()
+                    assert self.report_request.completion_timestamp
+                return
+        
+        self.report_request = self.create_report_request()
+        self.report = self.report_request.get_report()
+        if self.asynchronous_report:
+            from tasks import async_report
+            self.task = async_report.delay(self.report_request.token)
+            self.request.session[key] = {'token':self.report_request.token,
+                                         'task':self.task,}
+        else:
+            self.request.session[key] = {'token':self.report_request.token}
+            self.report_request.build_report()
+            self.report_request = ReportRequest.objects.get(pk=self.report_request.pk)
+            assert self.report_request.completion_timestamp
     
     def create_report_request(self):
         report_params = self.report_params()
@@ -119,6 +128,32 @@ class ReportView(ListView):
                            params=report_params)
         rr.save()
         return rr
+    
+    def get(self, request, *args, **kwargs):
+        self.get_report_request()
+        status = self.check_report_status()
+        if 'error' in status:
+            #CONSIDER add max retries
+            self.request.session.pop(self.get_session_key(), None)
+            return HttpResponseRedirect(self.report_request.get_report_request_url())
+        url = self.report_request.get_absolute_url()
+        if 'output' in self.kwargs:
+            url = '%s%s/' % (url, self.kwargs['output'])
+        return HttpResponseRedirect(url)
+
+request_report = never_cache(staff_member_required(RequestReportView.as_view()))
+
+class ReportView(ListView, RequestReportMixin):
+    asynchronous_report = ASYNC_REPORTS
+    paginate_by = 50
+    
+    def get_session_key(self):
+        return RequestReportMixin.get_session_key(self, self.report_request.namespace, self.report_request.slug, self.report_request.params)
+    
+    def get_report_request(self):
+        token = self.kwargs['token']
+        self.report_request = ReportRequest.objects.get(token=token)
+        self.report = self.report_request.get_report()
     
     def get_queryset(self):
         return ReportRowQuery(self.report_request.rows.all())
@@ -169,17 +204,25 @@ class ReportView(ListView):
                     'filter_form':self.get_filter_form(),
                     "aggregates":self.report_request.aggregates,
                     "cl":self.get_changelist(data),
-                    "urlparams":urlencode(self.request.REQUEST)})
+                    'report_request':self.report_request,
+                    "urlparams":urlencode(self.report_request.params)})
         return data
     
     def get(self, request, *args, **kwargs):
-        if not self.get_report_request():
+        self.get_report_request()
+        status = self.check_report_status()
+        if 'error' in status: #there was an error, try recreating the report
+            #CONSIDER add max retries
+            self.request.session.pop(self.get_session_key(), None)
+            return HttpResponseRedirect(self.report_request.get_report_request_url())
+        if not status['completed']:
             assert self.asynchronous_report
-            cx = {"reportrequest":self.report_request,
-                  'task':self.task}
+            cx = {"report_request":self.report_request,}
             return render_to_response("reportengine/async_wait.html",
                                       cx,
                                       context_instance=RequestContext(self.request))
+        self.request.session.pop(self.get_session_key(), None)
+        
         self.object_list = self.get_queryset()
         kwargs['object_list'] = self.object_list
         data = self.get_context_data(**kwargs)

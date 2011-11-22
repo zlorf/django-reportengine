@@ -39,7 +39,7 @@
     {% if filter_form.fields %}
     <h3>Filter</h3>
     <div id="filters">
-        <form>
+        <form action="{{ report_request.get_report_url }}">
         <table>
         {{ filter_form.as_table }}
         </table>
@@ -47,6 +47,12 @@
         </form>
     </div>
     {% endif %}
+    {% endblock %}
+    
+    {% block refresh %}
+    <div>
+    <a href="{{report_request.get_report_request_url}}">Refresh</a>
+    </div>
     {% endblock %}
 
     {% block alternate-formats %}
@@ -56,7 +62,7 @@
         {% ifequal of output_format %}
         {{ of.verbose_name }} {% if not forloop.last %}|{% endif %}
         {% else %}
-        <a href="{% url reports-view-format report.namespace report.slug of.slug %}?{{ urlparams }}">{{ of.verbose_name }}</a> {% if not forloop.last %}|{% endif %}
+        <a href="{% url reports-request-view-format report_request.token of.slug %}">{{ of.verbose_name }}</a> {% if not forloop.last %}|{% endif %}
         {% endifequal %}
         {% endfor %}
     </div>

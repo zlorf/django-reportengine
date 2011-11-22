@@ -1,9 +1,10 @@
 from django.db import models
 import datetime
+from urllib import urlencode
 import reportengine
 
 from jsonfield import JSONField
-from settings import STALE_REPORT_SECONDS 
+from settings import STALE_REPORT_SECONDS
 
 class ReportRequestManager(models.Manager):
     def completed(self):
@@ -22,9 +23,10 @@ class ReportRequest(models.Model):
     namespace = models.CharField(max_length=255)
     slug = models.CharField(max_length=255)
     params = JSONField() #GET params
-    request_made = models.DateTimeField(default=datetime.datetime.now)
+    request_made = models.DateTimeField(default=datetime.datetime.now, db_index=True)
     completion_timestamp = models.DateTimeField(blank=True, null=True)
-    token = models.CharField(max_length=255)
+    token = models.CharField(max_length=255, db_index=True)
+    task = models.CharField(max_length=128, blank=True)
     #content = models.TextField()
     viewed_on = models.DateTimeField(blank=True, null=True)
     #mimetype = models.CharField(max_length=255,null=True)
@@ -34,6 +36,17 @@ class ReportRequest(models.Model):
     
     def get_report(self):
         return reportengine.get_report(self.namespace, self.slug)()
+    
+    @models.permalink
+    def get_absolute_url(self):
+        return ('reports-request-view', [self.token], {})
+    
+    @models.permalink
+    def get_report_url(self):
+        return ('reports-view', [self.namespace, self.slug], {})
+    
+    def get_report_request_url(self):
+        return '%s?%s' % (self.get_report_url(), urlencode(self.params))
     
     def build_report(self):
         kwargs = self.params
@@ -77,6 +90,13 @@ class ReportRequest(models.Model):
         self.aggregates = aggregates
         self.completion_timestamp = datetime.datetime.now()
         self.save()
+    
+    def task_status(self):
+        if self.task:
+            from tasks import async_report
+            result = async_report.AsyncResult(self.task)
+            return result.state
+        return None
 
 class ReportRequestRow(models.Model):
     report_request = models.ForeignKey(ReportRequest, related_name='rows')

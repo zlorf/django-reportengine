@@ -28,9 +28,13 @@ urlpatterns = patterns('reportengine.views',
 
 urlpatterns += patterns('reportengine.views',
     # View report in first output style
-    url('^view/(?P<namespace>[-\w]+)/(?P<slug>[-\w]+)/$', 'view_report', name='reports-view'),
+    url('^request/(?P<namespace>[-\w]+)/(?P<slug>[-\w]+)/$', 'request_report', name='reports-view'),
     # view report in specified output format
-    url('^view/(?P<namespace>[-\w]+)/(?P<slug>[-\w]+)/(?P<output>[-\w]+)/$', 'view_report', name='reports-view-format'),
+    url('^request/(?P<namespace>[-\w]+)/(?P<slug>[-\w]+)/(?P<output>[-\w]+)/$', 'request_report', name='reports-view-format'),
+    
+    url('^view/(?P<token>[\w\d]+)/$', 'view_report', name='reports-request-view'),
+    # view report in specified output format
+    url('^view/(?P<token>[\w\d]+)/(?P<output>[-\w]+)/$', 'view_report', name='reports-request-view-format'),
 )
 
 
