@@ -45,9 +45,6 @@ class ReportRequest(models.Model):
     def get_report_url(self):
         return ('reports-view', [self.namespace, self.slug], {})
     
-    def get_report_request_url(self):
-        return '%s?%s' % (self.get_report_url(), urlencode(self.params))
-    
     def build_report(self):
         kwargs = self.params
 

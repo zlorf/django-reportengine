@@ -6,7 +6,7 @@ from django.contrib.admin.views.decorators import staff_member_required
 from django.core.urlresolvers import reverse
 from django.http import HttpResponseRedirect
 from django.conf import settings
-from django.views.generic import ListView, View
+from django.views.generic import ListView, View, TemplateView
 from django.views.decorators.cache import never_cache
 
 import reportengine
@@ -74,14 +74,17 @@ class RequestReportMixin(object):
 creport requested
 '''
 
-class RequestReportView(View, RequestReportMixin):
+class RequestReportView(TemplateView, RequestReportMixin):
+    template_name = 'reportengine/request_report.html'
+    
     def report_params(self):
         '''
         Return report params without the output format
         '''
-        params = dict(self.request.GET.iteritems())
+        params = dict(self.request.POST.iteritems())
         params.pop('output', None)
         params.pop('page', None)
+        params.pop('_submit', None)
         return params
         
     def get_session_key(self):
@@ -92,6 +95,7 @@ class RequestReportView(View, RequestReportMixin):
         key = self.get_session_key()
         data = self.request.session.get(key, None)
         self.task = None
+        self.report_request = None
         
         if data is not None:
             try:
@@ -104,19 +108,6 @@ class RequestReportView(View, RequestReportMixin):
                     self.report_request.build_report()
                     assert self.report_request.completion_timestamp
                 return
-        
-        self.report_request = self.create_report_request()
-        self.report = self.report_request.get_report()
-        if self.asynchronous_report:
-            from tasks import async_report
-            self.task = async_report.delay(self.report_request.token)
-            self.request.session[key] = {'token':self.report_request.token,
-                                         'task':self.task,}
-        else:
-            self.request.session[key] = {'token':self.report_request.token}
-            self.report_request.build_report()
-            self.report_request = ReportRequest.objects.get(pk=self.report_request.pk)
-            assert self.report_request.completion_timestamp
     
     def create_report_request(self):
         report_params = self.report_params()
@@ -129,17 +120,66 @@ class RequestReportView(View, RequestReportMixin):
         rr.save()
         return rr
     
+    #CONSIDER inherit from a form view
+    def get_report_class(self):
+        return reportengine.get_report(self.kwargs['namespace'], self.kwargs['slug'])
+    
+    def get_form(self):
+        report_cls = self.get_report_class()
+        report = report_cls()
+        if self.request.method.upper() == 'POST':
+            form = report.get_filter_form(data=self.request.POST)
+        else:
+            form = report.get_filter_form(data=None)
+        return form
+    
+    def get_context_data(self, **kwargs):
+        context = TemplateView.get_context_data(self, **kwargs)
+        context['filter_form'] = self.get_form()
+        context['report'] = self.get_report_class()()
+        return context
+    
+    def create_and_redirect_to_report_request(self):
+        key = self.get_session_key()
+        self.report_request = self.create_report_request()
+        self.report = self.report_request.get_report()
+        if self.asynchronous_report:
+            from tasks import async_report
+            self.task = async_report.delay(self.report_request.token)
+            self.request.session[key] = {'token':self.report_request.token,
+                                         'task':self.task,}
+        else:
+            self.request.session[key] = {'token':self.report_request.token}
+            self.report_request.build_report()
+            self.report_request = ReportRequest.objects.get(pk=self.report_request.pk)
+            assert self.report_request.completion_timestamp
+        return HttpResponseRedirect(self.report_request.get_absolute_url())
+    
     def get(self, request, *args, **kwargs):
         self.get_report_request()
-        status = self.check_report_status()
-        if 'error' in status:
-            #CONSIDER add max retries
-            self.request.session.pop(self.get_session_key(), None)
-            return HttpResponseRedirect(self.report_request.get_report_request_url())
-        url = self.report_request.get_absolute_url()
-        if 'output' in self.kwargs:
-            url = '%s%s/' % (url, self.kwargs['output'])
-        return HttpResponseRedirect(url)
+        if self.report_request:
+            status = self.check_report_status()
+            if 'error' in status:
+                #CONSIDER add max retries
+                self.request.session.pop(self.get_session_key(), None)
+                return HttpResponseRedirect(self.report_request.get_report_url())
+            url = self.report_request.get_absolute_url()
+            if 'output' in self.kwargs:
+                url = '%s%s/' % (url, self.kwargs['output'])
+            return HttpResponseRedirect(url)
+        
+        context = self.get_context_data(**kwargs)
+        if not context['filter_form'].fields:
+            return self.create_and_redirect_to_report_request()
+        return self.render_to_response(context)
+    
+    def post(self, request, *args, **kwargs):
+        form = self.get_form()
+        if True or form.is_valid(): #TODO filter controls need to be optional
+            return self.create_and_redirect_to_report_request()
+        else:
+            context = self.get_context_data(**kwargs)
+            return self.render_to_response(context)
 
 request_report = never_cache(staff_member_required(RequestReportView.as_view()))
 
@@ -214,7 +254,7 @@ class ReportView(ListView, RequestReportMixin):
         if 'error' in status: #there was an error, try recreating the report
             #CONSIDER add max retries
             self.request.session.pop(self.get_session_key(), None)
-            return HttpResponseRedirect(self.report_request.get_report_request_url())
+            return HttpResponseRedirect(self.report_request.get_report_url())
         if not status['completed']:
             assert self.asynchronous_report
             cx = {"report_request":self.report_request,}
