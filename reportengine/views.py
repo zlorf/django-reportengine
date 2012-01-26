@@ -293,7 +293,9 @@ class ReportExportView(TemplateView, RequestReportMixin):
             assert self.asynchronous_report
             cx = {"report_request":self.report_request,
                   "report":self.report,
-                  'title':self.report.verbose_name,}
+                  'title':self.report.verbose_name,
+                  'format':self.kwargs['output'],}
+            print cx
             return render_to_response("reportengine/async_wait.html",
                                       cx,
                                       context_instance=RequestContext(self.request))
@@ -311,7 +313,8 @@ class ReportExportView(TemplateView, RequestReportMixin):
             assert self.asynchronous_report
             cx = {"report_request":self.report_request,
                   "report":self.report,
-                  'title':self.report.verbose_name,}
+                  'title':self.report.verbose_name,
+                  'format':self.kwargs['output'],}
             return render_to_response("reportengine/async_wait.html",
                                       cx,
                                       context_instance=RequestContext(self.request))
