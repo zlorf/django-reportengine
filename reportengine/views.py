@@ -1,4 +1,4 @@
-from settings import ASYNC_REPORTS
+from settings import ASYNC_REPORTS, MAX_ROWS_FOR_QUICK_EXPORT
 
 from django.shortcuts import render_to_response,redirect
 from django.template.context import RequestContext
@@ -297,6 +297,10 @@ class ReportExportView(TemplateView, RequestReportMixin):
             return render_to_response("reportengine/async_wait.html",
                                       cx,
                                       context_instance=RequestContext(self.request))
+        
+        #if the report is small enough there is no need to create a task to export
+        if self.report_request.rows.all().count() <=  MAX_ROWS_FOR_QUICK_EXPORT:
+            return ReportView.as_view()(self.request, *self.args, **self.kwargs)
         
         self.get_report_export_request()
         status = self.check_report_export_status()
