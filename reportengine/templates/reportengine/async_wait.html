@@ -20,6 +20,7 @@
 <div class="breadcrumbs">
      <a href="/admin/">{% trans "Home" %}</a> &rsaquo;
      <a href="{% url reports-list %}">{% trans "Reports" %}</a> &rsaquo;
-     {{report.verbose_name}}
+     <a href="{{ report_request.get_report_url }}">{{report.verbose_name}}</a> &rsaquo;
+     {% trans "Report Result" %}
 </div>
 {% endblock %}

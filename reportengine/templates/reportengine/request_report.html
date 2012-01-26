@@ -46,5 +46,31 @@
         </form>
     </div>
     {% endblock %}
+    
+    {% block requested_reports %}
+    <h3>{% trans "Previously Requested Reports" %}</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>{% trans "Request Time" %}</th>
+                <th>{% trans "Completion Time" %}</th>
+                <th>{% trans "Params" %}</th>
+                <th>{% trans "Link" %}</th>
+                <th>{% trans "Status" %}</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for report_request in requested_reports %}
+        <tr>
+            <td>{{report_request.request_made}}</td>
+            <td>{{report_request.completion_timestamp}}</td>
+            <td>{{report_request.params}}</td>
+            <td><a href="{{report_request.get_absolute_url}}">{% trans "View Report" %}</a></td>
+            <td>{{report_request.task_status}}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% endblock %}
 </div>
 {% endblock %}

@@ -4,7 +4,6 @@ from django.shortcuts import render_to_response,redirect
 from django.template.context import RequestContext
 from django.contrib.admin.views.decorators import staff_member_required
 from django.core.urlresolvers import reverse
-from django.core.exceptions import ObjectDoesNotExist
 from django.http import HttpResponseRedirect, Http404
 from django.conf import settings
 from django.views.generic import ListView, View, TemplateView
@@ -77,10 +76,13 @@ class RequestReportView(TemplateView, RequestReportMixin):
         '''
         Return report params without the output format
         '''
+        if hasattr(self, 'form'):
+            return self.form.cleaned_data
         params = dict(self.request.POST.iteritems())
         params.pop('output', None)
         params.pop('page', None)
         params.pop('_submit', None)
+        params.pop('csrfmiddlewaretoken', None)
         return params
     
     def create_report_request(self):
@@ -107,10 +109,16 @@ class RequestReportView(TemplateView, RequestReportMixin):
             form = report.get_filter_form(data=None)
         return form
     
+    def get_requested_reports(self):
+        qs = ReportRequest.objects.filter(namespace=self.kwargs['namespace'],
+                                          slug=self.kwargs['slug'],)
+        return qs
+    
     def get_context_data(self, **kwargs):
         context = TemplateView.get_context_data(self, **kwargs)
         context['filter_form'] = self.get_form()
         context['report'] = self.get_report_class()()
+        context['requested_reports'] = self.get_requested_reports()
         return context
     
     def create_and_redirect_to_report_request(self):
@@ -126,13 +134,13 @@ class RequestReportView(TemplateView, RequestReportMixin):
     
     def get(self, request, *args, **kwargs):
         context = self.get_context_data(**kwargs)
-        if not context['filter_form'].fields:
+        if not context['filter_form'].fields and not context['requested_reports']:
             return self.create_and_redirect_to_report_request()
         return self.render_to_response(context)
     
     def post(self, request, *args, **kwargs):
-        form = self.get_form()
-        if True or form.is_valid(): #TODO filter controls need to be optional
+        self.form = self.get_form()
+        if self.form.is_valid(): #TODO filter controls need to be optional
             return self.create_and_redirect_to_report_request()
         else:
             context = self.get_context_data(**kwargs)
@@ -253,6 +261,8 @@ class ReportExportView(TemplateView, RequestReportMixin):
                                                              format=self.kwargs['output'],
                                                              token=(self.report_request.token + self.kwargs['output']),)
             self.report_export_request.save()
+            #TODO if the parent report is done and has under a certain number of rows, then no async is needed
+            #however if opting the no-async route then it may not be necessary to create this object and upload the result to s3
             if self.asynchronous_report:
                 self.task = self.report_export_request.schedule_task()
             else:
