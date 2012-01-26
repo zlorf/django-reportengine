@@ -1,5 +1,5 @@
 from celery.decorators import task
-from models import ReportRequest
+from models import ReportRequest, ReportRequestExport
 import reportengine
 
 @task()
@@ -13,6 +13,19 @@ def async_report(token):
     # THis is like 90% the same 
     reportengine.autodiscover() ## Populate the reportengine registry
     report_request.build_report()
+
+@task()
+def async_report_export(token):
+   
+    try:
+        report_request_export = ReportRequestExport.objects.get(token=token)
+    except ReportRequestExport.DoesNotExist:
+        # Error?
+        return 
+    # THis is like 90% the same 
+    reportengine.autodiscover() ## Populate the reportengine registry
+    report_request_export.build_report()
+
 
 @task()
 def cleanup_stale_reports():

@@ -1,10 +1,34 @@
 from django.db import models
+from django.db.models import Q
+
 import datetime
-from urllib import urlencode
 import reportengine
 
 from jsonfield import JSONField
 from settings import STALE_REPORT_SECONDS
+
+class AbstractScheduledTask(models.Model):
+    request_made = models.DateTimeField(default=datetime.datetime.now, db_index=True)
+    completion_timestamp = models.DateTimeField(blank=True, null=True)
+    token = models.CharField(max_length=255, db_index=True)
+    task = models.CharField(max_length=128, blank=True)
+    
+    def get_task_function(self):
+        raise NotImplementedError
+    
+    def task_status(self):
+        if self.task:
+            func = self.get_task_function()
+            result = func.AsyncResult(self.task)
+            return result.state
+        return None
+    
+    def schedule_task(self):
+        func = self.get_task_function()
+        return func.delay(self.token)
+    
+    class Meta:
+        abstract = True
 
 class ReportRequestManager(models.Manager):
     def completed(self):
@@ -12,24 +36,18 @@ class ReportRequestManager(models.Manager):
     
     def stale(self):
         cutoff = datetime.datetime.now() - datetime.timedelta(seconds=STALE_REPORT_SECONDS)
-        return self.filter(request_made__lte=cutoff)
+        return self.filter(completion_timestamp__lte=cutoff).filter(Q(viewed_on__lte=cutoff) | Q(viewed_on__isnull=True))
     
     def cleanup_stale_requests(self):
         return self.stale().delete()
 
-class ReportRequest(models.Model):
+class ReportRequest(AbstractScheduledTask):
     """Session based report request. Report request is made, and the token for the request is stored in the session so only that user can access this report. Task system generates the report and drops it into "content". When content is no longer null, user sees full report and their session token is cleared."""
     # TODO consider cleanup (when should this be happening? after the request is made? What about caching? throttling?)
     namespace = models.CharField(max_length=255)
     slug = models.CharField(max_length=255)
     params = JSONField() #GET params
-    request_made = models.DateTimeField(default=datetime.datetime.now, db_index=True)
-    completion_timestamp = models.DateTimeField(blank=True, null=True)
-    token = models.CharField(max_length=255, db_index=True)
-    task = models.CharField(max_length=128, blank=True)
-    #content = models.TextField()
     viewed_on = models.DateTimeField(blank=True, null=True)
-    #mimetype = models.CharField(max_length=255,null=True)
     aggregates = JSONField(datatype=list)
     
     objects = ReportRequestManager()
@@ -88,14 +106,59 @@ class ReportRequest(models.Model):
         self.completion_timestamp = datetime.datetime.now()
         self.save()
     
-    def task_status(self):
-        if self.task:
-            from tasks import async_report
-            result = async_report.AsyncResult(self.task)
-            return result.state
-        return None
+    def get_task_function(self):
+        from tasks import async_report
+        return async_report
 
 class ReportRequestRow(models.Model):
     report_request = models.ForeignKey(ReportRequest, related_name='rows')
     row_number = models.PositiveIntegerField()
     data = JSONField(datatype=list)
+
+class ReportRequestExport(AbstractScheduledTask):
+    report_request = models.ForeignKey(ReportRequest, related_name='exports')
+    format = models.CharField(max_length=10)
+    #mimetype = models.CharField(max_length=50)
+    #content_disposition = models.CharField(max_length=200)
+    payload = models.FileField(upload_to='reportengine/exports/%Y/%m/%d')
+    
+    def build_report(self):
+        from views import ReportRowQuery
+        from urllib import urlencode
+        
+        from django.test.client import RequestFactory
+        from django.core.files.base import ContentFile
+        
+        report = self.report_request.get_report()
+        object_list = ReportRowQuery(self.report_request.rows.all())
+        
+        
+        kwargs = {'report': report,
+                  'title':report.verbose_name,
+                  'rows':object_list,
+                  'filter_form':report.get_filter_form(data=None),
+                  "aggregates":self.report_request.aggregates,
+                  "cl":None,
+                  'report_request':self.report_request,
+                  "urlparams":urlencode(self.report_request.params)}
+        
+        
+        outputformat = None
+        for of in report.output_formats:
+            if of.slug == self.format:
+                outputformat = of
+        
+        response = outputformat.get_response(kwargs, RequestFactory().get('/'))
+        #TODO this is a hack
+        filename = response.get('Content-Disposition', '').rsplit('filename=',1)[-1]
+        if not filename:
+            filename = u'%s.%s' % (self.token, self.format)
+        self.payload.save(filename, ContentFile(response.content), False)
+        
+        self.completion_timestamp = datetime.datetime.now()
+        self.save()
+    
+    def get_task_function(self):
+        from tasks import async_report_export
+        return async_report_export
+
