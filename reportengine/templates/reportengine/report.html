@@ -18,7 +18,7 @@
 {% block breadcrumbs %}
 <div class="breadcrumbs">
      <a href="/admin/">{% trans "Home" %}</a> &rsaquo;
-     <a href="{% url reports-list %}">Reports</a> &rsaquo;
+     <a href="{% url reports-list %}">{% trans "Reports" %}</a> &rsaquo;
      {{report.verbose_name}}
 </div>
 {% endblock %}
@@ -30,27 +30,27 @@
 
     {% block description %}
     {% if report.description %}
-    <h3>Description</h3>
+    <h3>{% trans "Description" %}</h3>
     <div id="description">{{ report.description }}</div>
     {% endif %}
     {% endblock %}
 
     {% block filters %}
     {% if filter_form.fields %}
-    <h3>Filters</h3>
+    <h3>{% trans "Filters" %}</h3>
     <div id="filters">
         <form action="{{ report_request.get_report_url }}" method="POST">{% csrf_token %}
         <table>
         {{ filter_form.as_table }}
         </table>
-        <input type="submit" value="Request Report" />
+        <input type="submit" value="{% trans 'Request Report' %}" />
         </form>
     </div>
     {% endif %}
     {% endblock %}
 
     {% block alternate-formats %}
-    <h3>Alternate Formats</h3>
+    <h3>{% trans "Alternate Formats" %}</h3>
     <div>
         {% for of in report.output_formats %}
         {% ifequal of output_format %}

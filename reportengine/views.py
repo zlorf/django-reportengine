@@ -4,7 +4,7 @@ from django.shortcuts import render_to_response,redirect
 from django.template.context import RequestContext
 from django.contrib.admin.views.decorators import staff_member_required
 from django.core.urlresolvers import reverse
-from django.http import HttpResponseRedirect
+from django.http import HttpResponseRedirect, Http404
 from django.conf import settings
 from django.views.generic import ListView, View, TemplateView
 from django.views.decorators.cache import never_cache
@@ -249,7 +249,10 @@ class ReportView(ListView, RequestReportMixin):
         return data
     
     def get(self, request, *args, **kwargs):
-        self.get_report_request()
+        try:
+            self.get_report_request()
+        except ReportRequest.DoesNotExist:
+            raise Http404()
         status = self.check_report_status()
         if 'error' in status: #there was an error, try recreating the report
             #CONSIDER add max retries
@@ -257,7 +260,9 @@ class ReportView(ListView, RequestReportMixin):
             return HttpResponseRedirect(self.report_request.get_report_url())
         if not status['completed']:
             assert self.asynchronous_report
-            cx = {"report_request":self.report_request,}
+            cx = {"report_request":self.report_request,
+                  "report":self.report,
+                  'title':self.report.verbose_name,}
             return render_to_response("reportengine/async_wait.html",
                                       cx,
                                       context_instance=RequestContext(self.request))
