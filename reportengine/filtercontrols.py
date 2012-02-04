@@ -6,6 +6,7 @@ Different filter controls can be registered per field type. When assembling a se
 from django import forms
 from django.db import models
 from django.utils.translation import ugettext as _
+from django.utils.datastructures import SortedDict
 
 # TODO build register and lookup functions
 # TODO figure out how to manage filters and actual request params, which aren't always 1-to-1 (e.g. datetime)
@@ -43,7 +44,8 @@ class DateTimeFilterControl(FilterControl):
         ln=self.label or self.field_name
         start=forms.CharField(label=_("%s From")%ln,required=False,widget=forms.DateTimeInput(attrs={'class': 'vDateField'}))
         end=forms.CharField(label=_("%s To")%ln,required=False,widget=forms.DateTimeInput(attrs={'class': 'vDateField'}))
-        return {"%s__gte"%self.field_name:start,"%s__lt"%self.field_name:end}
+        return SortedDict([("%s__gte"%self.field_name, start),
+                           ("%s__lt"%self.field_name, end),])
 
 FilterControl.register(lambda m: isinstance(m,models.DateTimeField),DateTimeFilterControl,"datetime")
 
