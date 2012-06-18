@@ -2,6 +2,7 @@
 *.pye
 *.egg-info
 build
+dist
 bin
 *.db
 include
