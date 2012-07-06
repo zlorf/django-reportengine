@@ -88,25 +88,70 @@ class QuerySetReport(Report):
                 form.fields.update(fields)
         form.full_clean()
         return form
+    
+    def get_queryset(self, filters, order_by, queryset=None):
+        if queryset is None:
+            queryset = self.queryset
+        queryset = queryset.filter(**filters)
+        if order_by:
+            queryset = queryset.order_by(order_by)
+        return queryset
 
     def get_rows(self,filters={},order_by=None):
-        qs=self.queryset.filter(**filters)
-        if order_by:
-            qs=qs.order_by(order_by)
+        qs = self.get_queryset(filters, order_by)
         return qs.values_list(*self.labels),(("total",qs.count()),)
 
 class ModelReport(QuerySetReport):
     model = None
-
-    def __init__(self):
-        super(ModelReport,self).__init__()
-        self.queryset=self.model.objects
+    
+    def get_queryset(self, filters, order_by, queryset=None):
+        if queryset is None and self.queryset is None:
+            queryset = self.model.objects.all()
+        return super(ModelReport).get_queryset(filters, order_by, queryset)
 
 class SQLReport(Report):
     rows_sql=None # sql statement with named  parameters in python syntax (e.g. "%(age)s" )
     aggregate_sql=None # sql statement that brings in aggregates. pulls from column name and value for first row only
     query_params=[] # list of tuples, (name,label,datatype) where datatype is a mapping to a registerd filtercontrol
-
+    
+    def get_connection(self):
+        from django.db import connection
+        return connection
+    
+    def get_cursor(self):
+        return self.get_connection().cursor()
+    
+    def get_row_sql(self, filters, order_by):
+        if self.rows_sql:
+            return self.rows_sql % filters
+        return None
+    
+    def get_aggregate_sql(self, filters):
+        if self.aggregate_sql:
+            return self.aggregate_sql % filters
+        return None
+    
+    def get_row_data(self, filters, order_by):
+        sql = self.get_row_sql(filters, order_by)
+        if not sql:
+            return []
+        cursor = self.get_cursor()
+        cursor.execute(sql)
+        return cursor.fetchall()
+    
+    def get_aggregate_data(self, filters):
+        sql = self.get_aggregate_sql(filters)
+        if not sql:
+            return []
+        cursor = self.get_cursor()
+        cursor.execute(sql)
+        result = cursor.fetchone()
+        
+        agg = list()
+        for i in range(len(result)):
+            agg.append((cursor.description[i][0],result[i]))
+        return agg
+    
     def get_filter_form(self, data):
         form=forms.Form(data=data)
         for q in self.query_params:
@@ -118,23 +163,8 @@ class SQLReport(Report):
 
     # CONSIDER not ideal in terms paging, would be better to fetch within a range..
     def get_rows(self,filters={},order_by=None):
-        # TODO incorporate offset/limit somehow
-        from django.db import connection
-        cursor = connection.cursor()
-        if self.row_sql:
-            cursor.execute(self.row_sql%filters)
-            rows=cursor.fetchall()
-        else: rows=[]
-
-        if self.aggregate_sql:
-            cursor.execute(self.aggregate_sql%filters)
-            result=cursor.fetchone() # only fetch first row
-
-            agg=[]
-            for i in range(len(result)):
-                agg.append((cursor.description[i][0],result[i]))
-        else: agg=[]
-
+        rows = self.get_row_data(filters, order_by)
+        agg = self.get_aggregate_data(filters)
         return rows,agg
 
 class DateSQLReport(SQLReport):
