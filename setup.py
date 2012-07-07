@@ -2,7 +2,7 @@
 
 from setuptools import setup, find_packages
 
-VERSION = '0.2'
+VERSION = '0.2.1'
 LONG_DESC = """\
 Django Report Engine provides a reporting framework for Django 1.1+. Its goal is to be lightweight, provide multiple output formats, easily integrate into existing applications, and be open ended to both direct SQL reports, ORM based reports, or any other type of report imaginable. It is also attempting to be reasonably batteries-included with some basic Date based filtering assumptions, and simple namespacing of reports.
 
