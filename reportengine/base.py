@@ -103,7 +103,12 @@ class QuerySetReport(Report):
 
 class ModelReport(QuerySetReport):
     model = None
-    
+   
+ 
+    def __init__(self):
+        super(ModelReport, self).__init__()
+        self.queryset = self.model.objects.all()
+
     def get_queryset(self, filters, order_by, queryset=None):
         if queryset is None and self.queryset is None:
             queryset = self.model.objects.all()
