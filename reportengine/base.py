@@ -56,7 +56,7 @@ class Report(object):
     # CONSIDER should paging be dealt with here to more intelligently handle aggregates?
     def get_rows(self,filters={},order_by=None):
         """takes in parameters and pumps out an iterable of iterables for rows/cols, an list of tuples with (name/value) for the aggregates"""
-        raise NotImplementedError("Subclass should return [],(('total',0),)")
+        raise NotImplementedError("Subclass should return ([],('total',0),)")
 
 
     # CONSIDER do this by day or by month? month seems most efficient in terms of optimizing queries
