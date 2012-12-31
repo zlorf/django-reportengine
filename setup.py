@@ -39,7 +39,8 @@ setup(
     packages=find_packages(exclude=['example', 'example.example_reports', 'tests']),
     tests_require=[
         'django>=1.3,<1.5',
-        'factory_boy'
+        'factory_boy',
+        'django-celery',
     ],
     zip_safe=False,
     install_requires=[ ],
