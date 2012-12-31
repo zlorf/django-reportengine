@@ -36,7 +36,7 @@ class Sale(models.Model):
     tax_rate = models.DecimalField(max_digits=4, decimal_places=2)
 
 
-class SaleItems(models.Model):
+class SaleItem(models.Model):
     sale = models.ForeignKey(Sale)
 
     department = models.CharField(max_length=20)
