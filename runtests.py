@@ -20,6 +20,7 @@ if not settings.configured:
             'django.contrib.sessions',
             'django.contrib.sites',
             'reportengine',
+            'djcelery',
             'tests',
         ],
         MIDDLEWARE_CLASSES=global_settings.MIDDLEWARE_CLASSES + (
@@ -28,6 +29,7 @@ if not settings.configured:
         ROOT_URLCONF='',
         DEBUG=False,
         SITE_ID=1,
+        CELERY_ALWAYS_EAGER=True,
     )
 
 from django.test.simple import DjangoTestSuiteRunner
