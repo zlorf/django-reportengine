@@ -53,6 +53,11 @@ class CSVOutputFormat(OutputFormat):
         self.lineterminator=lineterminator
 
     def generate_output(self, context, output):
+        """
+        :param context: should be a dictionary with keys 'aggregates' and 'rows' and 'report'
+        :param output: should be a file-like object to which output can be written?
+        :return: modified output object
+        """
         w=csv.writer(output,
                     delimiter=self.delimiter,
                     quotechar=self.quotechar,
