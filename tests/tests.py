@@ -8,7 +8,7 @@ from django.test import TestCase
 #from django.test import RequestFactory
 import factory
 import models
-from reports import CustomerReport, CustomerSalesReport
+from reports import CustomerReport, CustomerSalesReport, SaleItemReport, CustomerByStamp
 from datetime import datetime, timedelta
 from utils import first_names, last_names
 import random
@@ -16,8 +16,8 @@ import reportengine
 
 class CustomerFactory(factory.Factory):
     FACTORY_FOR = models.Customer
-    first_name = 'Kevin'
-    last_name = 'Mooney'
+    first_name = 'Default'
+    last_name = 'Customer'
     stamp = datetime.now()
     age = 33
 
@@ -65,6 +65,7 @@ class SaleItemFactory(factory.Factory):
 class BaseTestCase(TestCase):
     sql_filters = {}
     test_total = 0.00
+    this_months_customers = 0
     def setUp(self):
         for i in range(0,100):
             c = CustomerFactory(
@@ -73,10 +74,14 @@ class BaseTestCase(TestCase):
                 stamp=datetime.now() - timedelta(days=random.randint(1,365*4)),
                 age = random.randint(13,90)
             )
+            if c.stamp >= (datetime.now() - timedelta(days=30)):
+                self.this_months_customers += 1
             if i == 50:
                 self.sql_filters['first_name'] = c.first_name
                 self.sql_filters['last_name'] = c.last_name
-            sale = SaleFactory(customer=c)
+            address = AddressFactory(customer=c)
+            billing_info = BillingInfoFactory(address=address)
+            sale = SaleFactory(customer=c, ship_address=address, bill_info=billing_info)
             final_price = 0.00
             for j in range(random.randint(0,5)):
                 si = SaleItemFactory(sale=sale)
@@ -108,12 +113,18 @@ class ReportEngineTestCase(BaseTestCase):
         self.assertEqual(rows[0][2], self.test_total)
 
     def test_querysetreport(self):
-        sir = SalesItemReport()
+        sir = SaleItemReport()
         rows, metadata = sir.get_rows()
         self.assertEqual(models.SaleItem.objects.count(), len(rows))
 
     def test_datesqlreport(self):
-        self.assertTrue(False)
+        cbs = CustomerByStamp()
+        # shouldn't be required to get default mask.  it should be the... default
+        rows,metadata = cbs.get_rows(filters={'date__lt': (datetime.now()+timedelta(days=1)).strftime('%Y-%m-%d'),
+                                              'date__gte': (datetime.now()-timedelta(days=30)).strftime('%Y-%m-%d')
+                                             })
+
+        self.assertEqual(len(rows), self.this_months_customers)
 
     def test_report(self):
         self.assertTrue(False)

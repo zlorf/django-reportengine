@@ -50,5 +50,18 @@ class SaleItemReport(base.QuerySetReport):
     def get_queryset(self, *args, **kwargs):
         return SaleItem.objects.all()
 
+class CustomerByStamp(base.DateSQLReport):
+    """A Date SQL report to show customers by timestamp"""
+
+    slug = "customer-by-stamp"
+    namespace = "system"
+    description = "A list of all customers bracketed by start and end dates"
+
+    labels = ('first_name', 'last_name', 'stamp')
+
+    rows_sql = """
+        SELECT first_name, last_name, stamp FROM tests_customer
+        WHERE stamp < '%(date__lt)s' AND stamp >= '%(date__gte)s';
+    """
 
 
