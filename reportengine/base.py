@@ -103,8 +103,7 @@ class QuerySetReport(Report):
 
 class ModelReport(QuerySetReport):
     model = None
-   
- 
+
     def __init__(self):
         super(ModelReport, self).__init__()
         self.queryset = self.model.objects.all()
@@ -112,7 +111,7 @@ class ModelReport(QuerySetReport):
     def get_queryset(self, filters, order_by, queryset=None):
         if queryset is None and self.queryset is None:
             queryset = self.model.objects.all()
-        return super(ModelReport).get_queryset(filters, order_by, queryset)
+        return super(ModelReport, self).get_queryset(filters, order_by, queryset)
 
 class SQLReport(Report):
     rows_sql=None # sql statement with named  parameters in python syntax (e.g. "%(age)s" )
