@@ -21,7 +21,7 @@ class CustomerSalesReport(base.SQLReport):
     """A SQL Report to show sales by customer"""
 
     verbose_name = "Sales Report By Person"
-
+    allow_unspecified_filters = True
     slug = "sale-report"
     namespace = "system"
     description = "A listing of all sales reports"
@@ -37,6 +37,7 @@ class CustomerSalesReport(base.SQLReport):
         GROUP BY tests_customer.id
         ORDER BY total
     """
+register(CustomerSalesReport)
 
 class SaleItemReport(base.QuerySetReport):
     verbose_name = "Sales Items, filtered by customer"

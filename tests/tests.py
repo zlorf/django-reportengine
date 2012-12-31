@@ -8,11 +8,14 @@ from django.test import TestCase
 #from django.test import RequestFactory
 import factory
 import models
+import time
 from reports import CustomerReport, CustomerSalesReport, SaleItemReport, CustomerByStamp
 from datetime import datetime, timedelta
 from utils import first_names, last_names
 import random
 import reportengine
+import json
+from reportengine.outputformats import CSVOutputFormat
 
 class CustomerFactory(factory.Factory):
     FACTORY_FOR = models.Customer
@@ -76,7 +79,7 @@ class BaseTestCase(TestCase):
             )
             if c.stamp >= (datetime.now() - timedelta(days=30)):
                 self.this_months_customers += 1
-            if i == 50:
+            if i == 1:
                 self.sql_filters['first_name'] = c.first_name
                 self.sql_filters['last_name'] = c.last_name
             address = AddressFactory(customer=c)
@@ -87,8 +90,9 @@ class BaseTestCase(TestCase):
                 si = SaleItemFactory(sale=sale)
                 final_price += si.price
             sale.total = final_price + (final_price * sale.tax_rate)
-            if i == 50:
-                self.test_total = sale.total
+            if i == 1 or (c.first_name == self.sql_filters.get('first_name', '') and
+                          c.last_name == self.sql_filters.get('last_name', '')):
+                self.test_total += sale.total
             sale.save()
 
     def tearDown(self):
@@ -99,7 +103,7 @@ class ReportEngineTestCase(BaseTestCase):
 
     def test_reportregistration(self):
         len(reportengine._registry)
-        self.assertTrue(len(reportengine._registry) == 1)
+        self.assertTrue(len(reportengine._registry) == 2)
         self.assertTrue( (CustomerReport.namespace, CustomerReport.slug) in reportengine._registry )
 
     def test_modelreport(self):
@@ -127,10 +131,43 @@ class ReportEngineTestCase(BaseTestCase):
         self.assertEqual(len(rows), self.this_months_customers)
 
     def test_report(self):
-        self.assertTrue(False)
+        class CounterReport(reportengine.base.Report):
+            def get_rows(self, *args, **kwargs):
+                return [(x,) for x in range(0,10000)], ('total', 10000,)
+        cr = CounterReport()
+        rows, metadata = cr.get_rows()
+        self.assertTrue(len(rows), dict((metadata,))['total'])
 
     def test_fastcsvresponse(self):
-        self.assertTrue(False)
+        """
+        This should test that the CSV conversion from stored report data for 10,000 lines (100,000?) will
+        take less than 15 seconds.
+        """
+        class RandomNameReport(reportengine.base.Report):
+            labels = ('number', 'first_name', 'last_name',)
+            def get_rows(self, *args, **kwargs):
+                return [
+                        (x, random.choice(first_names), random.choice(last_names), ) for x in range(0,100000)
+                       ], ('total', 100000,)
+        rnr = RandomNameReport()
+        csv = CSVOutputFormat()
+        ctx = dict()
+        rows, metadata = rnr.get_rows()
+        ctx['rows'] = rows
+        ctx['aggregates'] = []
+        ctx['report'] = rnr
+
+        then = time.clock()
+        csv.get_response(ctx,None)
+        now = time.clock()
+        result = now - then
+
+        self.assertLessEqual(result,15)
+
 
     def test_reportrequest(self):
-        self.assertTrue(False)
+        from reportengine.models import ReportRequest
+        rr = ReportRequest.objects.create(namespace='system', slug='sale-report', params=json.dumps(self.sql_filters))
+        #ALWAYS_EAGER = True, so should run right away.
+        result = rr.schedule_task()
+        self.assertEqual(True,result.successful())
