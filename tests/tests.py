@@ -4,6 +4,7 @@
 #from django.contrib.auth.models import User
 #from django.http import HttpResponse
 #from django.template import Template, Context
+import decimal
 from django.test import TestCase
 #from django.test import RequestFactory
 import factory
@@ -48,8 +49,8 @@ class SaleFactory(factory.Factory):
     customer = factory.LazyAttribute(lambda a: CustomerFactory())
     ship_address = factory.LazyAttribute(lambda a: AddressFactory())
     bill_info = factory.LazyAttribute(lambda a: BillingInfoFactory())
-    total = 100.00
-    tax_rate = 0.08
+    total = decimal.Decimal("100.00")
+    tax_rate = decimal.Decimal("0.08")
     purchase_date = datetime.now()
 
 class SaleItemFactory(factory.Factory):
@@ -61,13 +62,13 @@ class SaleItemFactory(factory.Factory):
     name = "Isotoners - For Men!"
     option1 = "Blue"
     option2 = "Medium"
-    price = 25.00
+    price = decimal.Decimal("25.00")
 
 
 
 class BaseTestCase(TestCase):
     sql_filters = {}
-    test_total = 0.00
+    test_total = decimal.Decimal("0.00")
     this_months_customers = 0
     def setUp(self):
         for i in range(0,100):
@@ -85,7 +86,7 @@ class BaseTestCase(TestCase):
             address = AddressFactory(customer=c)
             billing_info = BillingInfoFactory(address=address)
             sale = SaleFactory(customer=c, ship_address=address, bill_info=billing_info)
-            final_price = 0.00
+            final_price = decimal.Decimal("0.00")
             for j in range(random.randint(0,5)):
                 si = SaleItemFactory(sale=sale)
                 final_price += si.price
