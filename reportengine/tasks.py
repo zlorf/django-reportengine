@@ -2,6 +2,7 @@ from celery.decorators import task
 from models import ReportRequest, ReportRequestExport
 import reportengine
 
+#TODO - Add fixtures for these tasks, so the report cleanup is loaded into celerybeat.
 @task()
 def async_report(token):
    
