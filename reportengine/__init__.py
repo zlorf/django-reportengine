@@ -1,4 +1,3 @@
-'''Duplicated from django-reporting by vitalik, but with my own twist -nb '''
 import imp
 from base import Report,ModelReport,QuerySetReport,SQLReport,DateSQLReport
 
@@ -18,6 +17,7 @@ def register(klass):
 def get_report(namespace,slug):
     """
     Fetches a report from the registry, by namespace and slug.
+
     :param namespace: The report namespace, a string.
     :param slug: The repot slug, a string
     :return: A subclass of reportengine.base.Report
@@ -29,7 +29,8 @@ def get_report(namespace,slug):
 
 def all_reports():
     """
-    Gets all reports from the registry/
+    Gets all reports from the registry
+
     :return:  A list of reports, subclasses of reportengine.base.Report
     """
     return _registry.items()

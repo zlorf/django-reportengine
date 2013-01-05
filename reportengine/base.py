@@ -1,6 +1,6 @@
 """
-Reports base class. This reports module tries to provide an ORM agnostic reports engine that will allow nice reports
-to be generated and exportable in a variety of formats. It seeks to be easy to use with querysets, raw SQL, or pure
+Reports base classes. This reports module tries to provide an ORM agnostic reports engine that will allow nice reports
+to be generated and exportable in a variety of formats. It seeks to be easy to use with query sets, raw SQL, or pure
 python. An additional goal is to have the reports be managed by model instances as well (e.g. a generic SQL based
 report that can be done in the backend).
 """
@@ -187,7 +187,6 @@ class ModelReport(QuerySetReport):
     def __init__(self):
         """
         Instantiate the ModelReport
-        :return:
         """
         super(ModelReport, self).__init__()
         self.queryset = self.model.objects.all()
@@ -200,6 +199,7 @@ class ModelReport(QuerySetReport):
         :param order_by: The field by which this report will be ordered.
         :param queryset: An optional queryset.  If none, this will use a queryset that gets all instances of
                          the given model.
+
         :return:  A filtered queryset.
         """
         if queryset is None and self.queryset is None:
@@ -218,6 +218,7 @@ class SQLReport(Report):
     def get_connection(self):
         """
         Gets the django database connection.
+
         :return:  The database connection.
         """
         from django.db import connection
@@ -227,6 +228,7 @@ class SQLReport(Report):
     def get_cursor(self):
         """
         Gets the cursor for the connection.
+
         :return: Database connection cursor
         """
         return self.get_connection().cursor()
@@ -260,6 +262,7 @@ class SQLReport(Report):
     def get_row_data(self, filters, order_by):
         """
         Returns the cursor based on a filter dictionary.
+
         :param filters:  A dictionary of field->value filters to filter the report.
         :param order_by:  The field by which this report should be ordered.  (Currently ignored by get_row_sql)
         :return:  A list of all results (from fetchall)
@@ -274,6 +277,7 @@ class SQLReport(Report):
     def get_aggregate_data(self, filters):
         """
         Returns the cursor based on a filter dictionary.
+
         :param filters: A dictionary of paramters by which this report will be filtered.
         :return:  The aggregates for this report, based on the aggregate sql.
         """
@@ -292,6 +296,7 @@ class SQLReport(Report):
     def get_filter_form(self, data):
         """
         Returns the filter form based on filter data.
+
         :param data: A dictionary with filters that should be used.
         :return: A filtering form for this report.
         """
@@ -310,6 +315,7 @@ class SQLReport(Report):
     def get_rows(self,filters={},order_by=None):
         """
         This returns all of the rows in the report, ignores order_by
+
         :param filters: A dictionary of filters upon which to filter the report.
         :param order_by: The field by which the report should be ordered.
         :return:  A tuple of rows and aggregate data (no meta data!)
