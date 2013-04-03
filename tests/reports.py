@@ -3,6 +3,7 @@ from reportengine import base, register
 from reportengine.filtercontrols import StartsWithFilterControl
 from models import Customer, SaleItem
 
+
 class CustomerReport(base.ModelReport):
     """An example of a model report"""
     verbose_name = "User Report"
@@ -17,6 +18,7 @@ class CustomerReport(base.ModelReport):
 
 register(CustomerReport)
 
+
 class CustomerSalesReport(base.SQLReport):
     """A SQL Report to show sales by customer"""
 
@@ -30,7 +32,7 @@ class CustomerSalesReport(base.SQLReport):
 
     list_filter=['first_name', 'last_name']
 
-    rows_sql = """
+    row_sql = """
         SELECT first_name, last_name, SUM(total) as total FROM tests_sale
         INNER JOIN tests_customer ON tests_sale.customer_id = tests_customer.id
         WHERE first_name = '%(first_name)s' AND last_name = '%(last_name)s'
@@ -38,6 +40,7 @@ class CustomerSalesReport(base.SQLReport):
         ORDER BY total
     """
 register(CustomerSalesReport)
+
 
 class SaleItemReport(base.QuerySetReport):
     verbose_name = "Sales Items, filtered by customer"
@@ -51,6 +54,7 @@ class SaleItemReport(base.QuerySetReport):
     def get_queryset(self, *args, **kwargs):
         return SaleItem.objects.all()
 
+
 class CustomerByStamp(base.DateSQLReport):
     """A Date SQL report to show customers by timestamp"""
 
@@ -60,7 +64,7 @@ class CustomerByStamp(base.DateSQLReport):
 
     labels = ('first_name', 'last_name', 'stamp')
 
-    rows_sql = """
+    row_sql = """
         SELECT first_name, last_name, stamp FROM tests_customer
         WHERE stamp < '%(date__lt)s' AND stamp >= '%(date__gte)s';
     """

@@ -221,7 +221,7 @@ class SQLReport(Report):
     """
     A subclass of Report, used with raw SQL.
     """
-    rows_sql=None # sql statement with named  parameters in python syntax (e.g. "%(age)s" )
+    row_sql=None # sql statement with named  parameters in python syntax (e.g. "%(age)s" )
     aggregate_sql=None # sql statement that brings in aggregates. pulls from column name and value for first row only
     query_params=[] # list of tuples, (name,label,datatype) where datatype is a mapping to a registerd filtercontrol
 
@@ -251,10 +251,10 @@ class SQLReport(Report):
 
         :param filters:  A dictionary of filters to apply to this sql.
         :param order_by: This is ignored, but may be used by subclasses.
-        :return:  The text-replaced SQL, or none if self.rows_sql doesn't exist.
+        :return:  The text-replaced SQL, or none if self.row_sql doesn't exist.
         """
-        if self.rows_sql:
-            return self.rows_sql % filters
+        if self.row_sql:
+            return self.row_sql % filters
         return None
     
     def get_aggregate_sql(self, filters):
