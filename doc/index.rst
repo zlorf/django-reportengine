@@ -10,6 +10,7 @@ Contents:
 
 .. toctree::
    :maxdepth: 2
+   :glob: .
 
 Introduction
 ---------------
@@ -26,16 +27,19 @@ them when the report is complete.
 
 
 
-Quickstart
-------------
+Getting Started
+----------------
 
-Here's the quickstart::
-    
+The easiest way to get started with ReportEngine is to install 
+from pypi::
+
     pip install django-reportengine
     
-Then, create a report::
+To do anything useful with Report Engine, you'll need to extend 
+its base reports.  The simplest of these reports is a model report::
     
     from reportengine.base import ModelReport
+    from myapp.models import MyModel
 
     class MyReport(ModelReport):
         model = MyModel 
@@ -43,21 +47,8 @@ Then, create a report::
 
 This will return a report of all objects of type `MyModel.`
 
-Report Engine
----------------
-.. automodule:: reportengine
-    :members:
-
-Report Classes
----------------
-.. automodule:: reportengine.base
-    :members:
-
-Filter Controls
-----------------
-.. automodule:: reportengine.filtercontrols
-    :members:
-
+Please see the `Class Reference` for details about implementing more 
+complex reports.
 
 
 Indices and tables
