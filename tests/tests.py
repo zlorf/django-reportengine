@@ -172,3 +172,12 @@ class ReportEngineTestCase(BaseTestCase):
         #ALWAYS_EAGER = True, so should run right away.
         result = rr.schedule_task()
         self.assertEqual(True,result.successful())
+
+    def test_reportexportrequest(self):
+        from reportengine.models import ReportRequest
+        rr = ReportRequest.objects.create(namespace='system', slug='sale-report', params=json.dumps(self.sql_filters))
+        #ALWAYS_EAGER = True, so should run right away.
+        result = rr.schedule_task()
+        self.assertEqual(True,result.successful())
+
+        

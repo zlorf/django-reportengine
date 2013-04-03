@@ -49,6 +49,12 @@ def get_lookup_field(model, original, lookup):
 class Report(object):
     """
     An abstract reportengine report.  Concrete report types inherit from this.  Override get_rows to make this concrete.
+
+    For Example::
+
+            class MyReport(Report):
+                def get_rows(self, *args, **kwargs):
+                    return [(x,x*10) for x in range(0,100)], (('total', 100),)
     """
     verbose_name="Abstract Report"
     namespace = "Default"
@@ -67,8 +73,12 @@ class Report(object):
     # then i can auto embed the charts at the top of the report based upon that data..
 
     def get_default_mask(self):
-        """Builds default mask. The filter is merged with this to create the filter for the report. Items can be
-           callable and will be resolved when called here (which should be at view time)."""
+        """
+           Builds default mask. The filter is merged with this to create the filter for the report. Items can be
+           callable and will be resolved when called here (which should be at view time).
+         
+           :return: a dictionary of filter key/value pairs
+        """
         m={}
         for k in self.default_mask.keys():
             v=self.default_mask[k]
@@ -78,6 +88,7 @@ class Report(object):
     def get_filter_form(self, data):
         """
         Returns a form with data.
+
         :param data: Should be a dictionary, with filter data in it.
         :return:  A form that is ready for validation.
         """
