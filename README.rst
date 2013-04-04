@@ -4,7 +4,7 @@ ReportEngine (for Django 1.1+)
 by Nikolaj Baer for Web Cube CMS [http://www.webcubecms.com]
 ------------------------------------------------------------
 
-*Version: Very Alpha*
+*Version: Beta*
 
 Overview
 --------
@@ -24,6 +24,6 @@ Example
 -------
 
 Take a look at the sample project and reports in the example folder. To run it
-you need to have Django 1.1.2 and reportengine on your PYTHONPATH.
+you need to have Django 1.3 or later and reportengine on your PYTHONPATH.
 
 

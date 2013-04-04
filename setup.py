@@ -2,9 +2,9 @@
 
 from setuptools import setup, find_packages
 
-VERSION = '0.2.1'
+VERSION = '0.3.1'
 LONG_DESC = """\
-Django Report Engine provides a reporting framework for Django 1.1+. Its goal
+Django Report Engine provides a reporting framework for Django 1.3+. Its goal
 is to be lightweight, provide multiple output formats, easily integrate into
 existing applications, and be open ended to both direct SQL reports, ORM based
 reports, or any other type of report imaginable. It is also attempting to be
@@ -27,7 +27,7 @@ setup(
         'Programming Language :: Python',
         'Operating System :: OS Independent',
         'Natural Language :: English',
-        'Development Status :: 3 - Alpha',
+        'Development Status :: 4 - Beta',
         'Intended Audience :: Developers',
         'Topic :: Internet :: WWW/HTTP :: Dynamic Content',
     ],
@@ -38,7 +38,7 @@ setup(
     license='MIT License',
     packages=find_packages(exclude=['example', 'example.example_reports', 'tests']),
     tests_require=[
-        'django>=1.3,<1.5',
+        'django>=1.3,<1.6',
         'factory_boy',
         'django-celery',
     ],
