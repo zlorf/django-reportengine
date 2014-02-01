@@ -162,7 +162,7 @@ class ReportView(ListView, RequestReportMixin):
         return ReportRowQuery(self.report_request.rows.all())
     
     def get_filter_form(self):
-        filter_form = self.report.get_filter_form(self.request.REQUEST)
+        filter_form = self.report.get_filter_form(self.report_request.params)
         return filter_form
     
     def get_changelist(self, info):
