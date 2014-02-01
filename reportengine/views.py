@@ -87,18 +87,22 @@ class RequestReportView(TemplateView, RequestReportMixin):
     
     def create_report_request(self):
         report_params = self.report_params()
-        token_params = [str(datetime.datetime.now()), self.kwargs['namespace'], self.kwargs['slug'], urlencode(report_params)]
+        namespace = self.kwargs.get('namespace', self.request.POST.get('namespace'))
+        slug = self.kwargs.get('slug', self.request.POST.get('slug'))
+        token_params = [str(datetime.datetime.now()), namespace, slug, urlencode(report_params)]
         token = hashlib.md5("|".join(token_params)).hexdigest()
         rr = ReportRequest(token=token,
-                           namespace=self.kwargs['namespace'],
-                           slug=self.kwargs['slug'],
+                           namespace=namespace,
+                           slug=slug,
                            params=report_params)
         rr.save()
         return rr
     
     #CONSIDER inherit from a form view
     def get_report_class(self):
-        return reportengine.get_report(self.kwargs['namespace'], self.kwargs['slug'])
+        namespace = self.kwargs.get('namespace', self.request.POST.get('namespace'))
+        slug = self.kwargs.get('slug', self.request.POST.get('slug'))
+        return reportengine.get_report(namespace, slug)
     
     def get_form(self):
         report_cls = self.get_report_class()
@@ -110,8 +114,9 @@ class RequestReportView(TemplateView, RequestReportMixin):
         return form
     
     def get_requested_reports(self):
-        qs = ReportRequest.objects.filter(namespace=self.kwargs['namespace'],
-                                          slug=self.kwargs['slug'],)
+        namespace = self.kwargs.get('namespace', self.request.POST.get('namespace'))
+        slug = self.kwargs.get('slug', self.request.POST.get('slug'))
+        qs = ReportRequest.objects.filter(namespace=namespace, slug=slug,)
         return qs
     
     def get_context_data(self, **kwargs):
