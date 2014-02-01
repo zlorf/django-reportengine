@@ -2,7 +2,7 @@
 
 from setuptools import setup, find_packages
 
-VERSION = '0.3.1'
+VERSION = '0.3.1.1'
 LONG_DESC = """\
 Django Report Engine provides a reporting framework for Django 1.3+. Its goal
 is to be lightweight, provide multiple output formats, easily integrate into
