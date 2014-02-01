@@ -2,7 +2,7 @@
 {% load adminmedia admin_list i18n %}
 
 {% block extrastyle %}
-  <link rel="stylesheet" type="text/css" href="{% admin_media_prefix %}css/changelists.css" />
+    <link rel="stylesheet" type="text/css" href="{% static 'admin/css/changelists.css' %}" />
 {% endblock %}
 
 
@@ -28,7 +28,7 @@
 		<H2>Reports</H2>
 
     <div>
-        <a href="{% url reports-calendar-current %}">Calendar View</a>
+        <a href="{% url "reports-calendar-current" %}">Calendar View</a>
     </div>
 
       <div id="changelist">
@@ -36,7 +36,7 @@
             {% for namespace in report_list %}
                 <h3>{{ namespace.grouper|title }}</h3>
                 {% for report in namespace.list|dictsort:"verbose_name" %}
-                    <a href="{% url reports-view report.namespace report.slug %}">{{ report.verbose_name }}</a><br />
+                    <a href="{% url "reports-view" report.namespace report.slug %}">{{ report.verbose_name }}</a><br />
                 {% endfor %}
             {% endfor %}
 	  </div>
