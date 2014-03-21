@@ -2,7 +2,7 @@ from settings import ASYNC_REPORTS, MAX_ROWS_FOR_QUICK_EXPORT
 
 from django.shortcuts import render_to_response,redirect
 from django.template.context import RequestContext
-from django.contrib.admin.views.decorators import staff_member_required
+from django.contrib.auth.decorators import permission_required
 from django.core.urlresolvers import reverse
 from django.http import HttpResponseRedirect, Http404
 from django.conf import settings
@@ -20,7 +20,7 @@ def next_month(d):
 
 
 # TODO Maybe use a class based view? how do i make it easy to build SQLReports?
-@staff_member_required
+@permission_required('reportengine.run_report')
 def report_list(request):
     # TODO make sure to constrain based upon permissions
     reports = [{'namespace': r.namespace, 'slug': r.slug, 'verbose_name': r.verbose_name} \
@@ -151,7 +151,7 @@ class RequestReportView(TemplateView, RequestReportMixin):
             context = self.get_context_data(**kwargs)
             return self.render_to_response(context)
 
-request_report = never_cache(staff_member_required(RequestReportView.as_view()))
+request_report = never_cache(permission_required('reportengine.run_report')(RequestReportView.as_view()))
 
 class ReportView(ListView, RequestReportMixin):
     asynchronous_report = ASYNC_REPORTS
@@ -247,7 +247,7 @@ class ReportView(ListView, RequestReportMixin):
             outputformat = self.report.output_formats[0]
         return outputformat.get_response(data, request)
 
-view_report = never_cache(staff_member_required(ReportView.as_view()))
+view_report = never_cache(permission_required('reportengine.run_report')(ReportView.as_view()))
 
 class ReportExportView(TemplateView, RequestReportMixin):
     asynchronous_report = ASYNC_REPORTS
@@ -325,9 +325,9 @@ class ReportExportView(TemplateView, RequestReportMixin):
                                       context_instance=RequestContext(self.request))
         return HttpResponseRedirect(self.report_export_request.payload.url)
 
-view_report_export = never_cache(staff_member_required(ReportExportView.as_view()))
+view_report_export = never_cache(permission_required('reportengine.run_report')(ReportExportView.as_view()))
 
-@staff_member_required
+@permission_required('reportengine.run_report')
 def current_redirect(request, daterange, namespace, slug, output=None):
     # TODO make month and year more intelligent per calendar
     days={"day":1,"week":7,"month":30,"year":365}
@@ -335,7 +335,7 @@ def current_redirect(request, daterange, namespace, slug, output=None):
     d1=d2 - datetime.timedelta(days=days[daterange])
     return redirect_report_on_date(request,d1,d2,namespace,slug,output)
 
-@staff_member_required
+@permission_required('reportengine.run_report')
 def day_redirect(request, year, month, day, namespace, slug, output=None):
     year,month,day=int(year),int(month),int(day)
     d1=datetime.datetime(year=year,month=month,day=day)
@@ -354,12 +354,12 @@ def redirect_report_on_date(request,start_day,end_day,namespace,slug,output=None
         return HttpResponseRedirect("%s?%s"%(reverse("reports-view-format",args=[namespace,slug,output]),urlencode(params)))
     return HttpResponseRedirect("%s?%s"%(reverse("reports-view",args=[namespace,slug]),urlencode(params)))
 
-@staff_member_required
+@permission_required('reportengine.run_report')
 def calendar_current_redirect(request):
     d=datetime.datetime.today()
     return redirect("reports-calendar-month",year=d.year,month=d.month)
 
-@staff_member_required
+@permission_required('reportengine.run_report')
 def calendar_month_view(request, year, month):
     # TODO make sure to constrain based upon permissions
     # TODO find all date_field accessible reports
@@ -374,7 +374,7 @@ def calendar_month_view(request, year, month):
     return render_to_response("reportengine/calendar_month.html",cx,
                               context_instance=RequestContext(request))
 
-@staff_member_required
+@permission_required('reportengine.run_report')
 def calendar_day_view(request, year, month,day):
     # TODO make sure to constrain based upon permissions
     # TODO find all date_field accessible reports

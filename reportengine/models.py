@@ -73,6 +73,11 @@ class ReportRequest(AbstractScheduledTask):
     aggregates = JSONField(datatype=list)
     
     objects = ReportRequestManager()
+
+    class Meta:
+        permissions = (
+                ('run_report', 'Can run reports'),
+                )
     
     def get_report(self):
         """
