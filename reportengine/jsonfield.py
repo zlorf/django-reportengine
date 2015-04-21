@@ -3,8 +3,9 @@ Django JSON Field.  This extends Django Model Fields to store JSON as a field-ty
 """
 #TODO - Move this to utils or another application.  This is tangential to reporting and useful for other things.
 
+import json
+
 from django.db import models
-from django.utils import simplejson
 from django.core.serializers.json import DjangoJSONEncoder
 
 import logging
@@ -25,7 +26,7 @@ class JSONFieldDescriptor(object):
             raise AttributeError(
                 "The '%s' attribute can only be accessed from %s instances."
                 % (self.field.name, owner.__name__))
-        
+
         if not hasattr(instance, self.field.get_cache_name()):
             data = instance.__dict__.get(self.field.attname, self.datatype())
             if not isinstance(data, self.datatype):
@@ -33,7 +34,7 @@ class JSONFieldDescriptor(object):
                 if data is None:
                     data = self.datatype()
             setattr(instance, self.field.get_cache_name(), data)
-        
+
         return getattr(instance, self.field.get_cache_name())
 
     def __set__(self, instance, value):
@@ -56,7 +57,7 @@ class JSONField(models.TextField):
     descriptor_class = JSONFieldDescriptor
 
     def __init__(self, verbose_name=None, name=None,
-                 encoder=DjangoJSONEncoder(), decoder=simplejson.JSONDecoder(),
+                 encoder=DjangoJSONEncoder(), decoder=json.JSONDecoder(),
                  datatype=dict,
                  **kwargs):
         """
@@ -96,7 +97,7 @@ class JSONField(models.TextField):
         """
         super(JSONField, self).contribute_to_class(cls, name)
         setattr(cls, self.name, self.descriptor_class(self, self.datatype))
-    
+
     def pre_save(self, model_instance, add):
         "Returns field's value just before saving.  If a descriptor, get's that instead of value from object."
         descriptor = getattr(model_instance, self.attname)
@@ -145,7 +146,7 @@ class JSONField(models.TextField):
         except ValueError:
             val = None
         return val
-    
+
     def south_field_triple(self):
         """
         Returns a suitable description of this field for South."
@@ -158,4 +159,3 @@ class JSONField(models.TextField):
         args, kwargs = introspector(self)
         # That's our definition!
         return (field_class, args, kwargs)
-
